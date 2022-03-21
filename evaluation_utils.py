@@ -177,21 +177,3 @@ def calculate_culled_correlation(ypred, ytest, fracs):
         c = get_pearsonr(ytest_frac, ypred_frac)
         corrs.append(c)
     return corrs
-
-
-def make_culled_correlation_plot(model_lbls, fracs, cs_dict, plot_params, savefile=None):
-    fig, ax = plt.subplots(figsize=(3, 3))
-    for lbl in model_lbls:
-        cs = cs_dict[lbl]
-        prms = plot_params[lbl]
-        ax.plot(fracs, cs,lw=1, **prms)
-    ax.set_xlabel("Fraction of top test sequences")
-    ax.set_ylabel("Pearson correlation")
-    fracs2 = [fracs[i] for i in range(len(fracs)) if i % 10 == 0]
-    ax.set_xticks(fracs2)
-    ax.set_xticklabels(["%.1f" % (1-f) for f in fracs2])
-    ax.legend()
-    plt.tight_layout()
-    if savefile is not None:
-        plt.savefig(savefile, dpi=300)
-    plt.show()

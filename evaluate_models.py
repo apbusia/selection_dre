@@ -132,6 +132,7 @@ def main(args):
         for k in metrics.keys():
             results['metrics'][k].append(metrics[k])
         fracs = np.arange(0, 1, 0.01)
+        results['meta']['culled_fracs'] = fracs
         culled_pearson = evaluation_utils.calculate_culled_correlation(preds, truth, fracs)
         results['metrics']['culled_pearson'].append(culled_pearson)
 
