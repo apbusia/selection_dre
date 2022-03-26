@@ -158,12 +158,15 @@ def make_errorbar_plot(xticks, vals, std_errs, title, figsize=(15,5), ylim=None)
         sns.despine()
 
 
-def calculate_culled_correlation(ypred, ytest, fracs):
+def calculate_culled_correlation(ypred, ytest, fracs, correlation_type='pearson'):
     """
     Calculates the pearson correlation between predictions and true fitness values
     among subsets of test data. In particular, test data is succesively culled to only
     include the largest true fitness values.
     """
+    if correlation_type not in ['pearson', 'spearman']:
+        raise NotImplementedError('culled correlations not implemented for correlation_type={}'.format(correlation_type))
+    get_correlation = get_pearsonr if correlation_type == 'pearson' else get_spearmanr
     corrs = []
     n_test = len(ypred)
     y_test = ytest[:n_test]
@@ -173,7 +176,6 @@ def calculate_culled_correlation(ypred, ytest, fracs):
         idx = sorted_test_idx[num_frac:]
         ypred_frac = ypred[idx]
         ytest_frac = ytest[idx]
-#         print(np.mean(ytest_frac), np.mean(ypred_frac))
         c = get_pearsonr(ytest_frac, ypred_frac)
         corrs.append(c)
     return corrs
