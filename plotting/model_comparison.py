@@ -27,7 +27,7 @@ def get_model_name(model_path):
     if 'linear' in model_path:
         return 'Linear, {}'.format(get_encoding_type(model_path))
     if 'ann' in model_path:
-        n_units = re.search('(?<=ann_classifier_)(\d+)x(\d+)', model_path).group(2)
+        n_units = re.search('(?<=ann_)(classifier_)?(\d+)x(\d+)', model_path).group(3)
         return 'NN, {}'.format(n_units)
 
 

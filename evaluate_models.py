@@ -7,8 +7,6 @@ from collections import defaultdict
 import tensorflow as tf
 from tensorflow import keras
 from scipy.special import log_softmax
-# import sys
-# sys.path.append('..')
 import data_prep
 import modeling
 import evaluation_utils
@@ -91,7 +89,7 @@ def main(args):
     
     results['metrics'] = defaultdict(list)
     for i, model_path in enumerate(model_paths):
-        disable_gpu(0)
+        disable_gpu(1)
         keras.backend.clear_session()
         
         print('\nUsing model {}'.format(model_path))
