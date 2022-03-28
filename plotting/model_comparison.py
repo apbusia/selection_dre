@@ -40,19 +40,17 @@ def get_task(model_path):
 def get_encoding_type(model_path):
     if 'pairwise' in model_path:
         return 'Pairwise'
+    if 'neighbors' in model_path:
+        return 'Neighbors'
     if 'is' in model_path:
         return 'IS'
 
 
 def get_color_palette():
-    linear_palette = sns.color_palette('crest', n_colors=2)
+    linear_palette = sns.color_palette('crest', n_colors=3)
     ann_palette = sns.color_palette('flare', n_colors=4)
-#     order = [
-#         'Linear Reg., IS', 'Linear Class., IS', 'Linear Reg., Pairwise', 'Linear Class., Pairwise',
-#         'NN Reg., 100', 'NN Class., 100', 'NN Reg., 200', 'NN Class., 200',
-#         'NN Reg., 500', 'NN Class., 500', 'NN Reg., 1000', 'NN Class., 1000']
     order = [
-        'Linear, IS', 'Linear, Pairwise', 'NN, 100', 'NN, 200', 'NN, 500', 'NN, 1000']
+        'Linear, IS', 'Linear, Neighbors', 'Linear, Pairwise', 'NN, 100', 'NN, 200', 'NN, 500', 'NN, 1000']
     return linear_palette + ann_palette, order
 
 
@@ -61,7 +59,7 @@ def make_culled_correlation_plot(results_df, out_dir, out_tag):
     palette, order = get_color_palette()
     reg_df, class_df = None, None
     for _, row in results_df.iterrows():
-        cur_df = {'fracs': np.arange(0, 1, 0.01), # TEMP B/C FORGOT TO SAVE/LOAD FRACS
+        cur_df = {'fracs': row['culled_fracs'],  # np.arange(0, 1, 0.01),
                   'culled_pearson': row['culled_pearson'],
                   'model': [row['model']] * len(row['culled_pearson'])}
         cur_df = pd.DataFrame(cur_df)
