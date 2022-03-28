@@ -102,7 +102,7 @@ def main(args):
                 # Adjust logistic indices for fact that dataset was duplicated during training.
                 test_idx = test_idx[test_idx < len(df)]
             truth = enrich_scores[test_idx]
-            seqs = df['seq'].iloc[test_idx]
+            seqs = df['seq'].iloc[test_idx].reset_index(drop=True)
         else:
             truth = enrich_scores
             seqs = df['seq']
@@ -111,11 +111,11 @@ def main(args):
         model = keras.models.load_model(model_path)
         encoding_type = get_encoding_type(model_path)
         if encoding_type == 'pairwise':
-            encoding = data_prep.encode_one_plus_pairwise
+            encoding = data_prep.index_encode_is_plus_pairwise
         elif encoding_type == 'is':
-            encoding = data_prep.one_hot_encode
+            encoding = data_prep.index_encode
         elif encoding_type == 'neighbors':
-            encoding = data_prep.encode_one_plus_neighbors
+            encoding = data_prep.index_encode_is_plus_neighbors
 
         print('\n\tGetting model predictions...')
         preds = get_model_predictions(model, model_type, seqs, encoding)
