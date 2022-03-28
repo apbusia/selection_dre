@@ -3,6 +3,7 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 from scipy.stats import pearsonr, spearmanr
 import data_prep
+from pre_process import AA_ORDER
 
 tfk = tf.keras
 tfkl = tf.keras.layers
@@ -24,6 +25,12 @@ def get_enrichment_dataset(sequences, enrich_scores, ids, encoding_fn, batch_siz
         ds = ds.shuffle(shuffle_buffer, seed=seed)
     ds = ds.batch(batch_size)
     ds = ds.prefetch(tf.data.AUTOTUNE)
+    onehot_depth = len(AA_ORDER)
+    if X.shape[1] > len(sequences[0]):
+        onehot_depth = onehot_depth + onehot_depth ** 2
+    flat_shape = [-1, X.shape[1] * onehot_depth]
+    onehot_fn = lambda x, y_0, y_1: (tf.reshape(tf.one_hot(x, onehot_depth), flat_shape), y_0, y_1)
+    ds = ds.map(onehot_fn, num_parallel_calls=tf.data.AUTOTUNE)
     return ds
 
 
@@ -37,6 +44,12 @@ def get_classification_dataset(sequences, classes, counts, ids, encoding_fn, bat
         ds = ds.shuffle(shuffle_buffer, seed=seed)
     ds = ds.batch(batch_size)
     ds = ds.prefetch(tf.data.AUTOTUNE)
+    onehot_depth = len(AA_ORDER)
+    if X.shape[1] > len(sequences[0]):
+        onehot_depth = onehot_depth + onehot_depth ** 2
+    flat_shape = [-1, X.shape[1] * onehot_depth]
+    onehot_fn = lambda x, y_0, y_1: (tf.reshape(tf.one_hot(x, onehot_depth), flat_shape), y_0, y_1)
+    ds = ds.map(onehot_fn, num_parallel_calls=tf.data.AUTOTUNE)
     return ds
     
     

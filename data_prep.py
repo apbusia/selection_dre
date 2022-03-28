@@ -21,6 +21,16 @@ def calculate_enrichment_scores(n_pre, n_post, N_pre, N_post):
     return np.array([mean_true, approx_sig]).T
 
 
+def index_encode(seq):
+    """
+    Returns an integer vector of indices representing
+    the input sequence.
+    """
+    l = len(seq)
+    out = [pre_process.AA_IDX[s] for s in seq]
+    return np.array(out)
+
+
 def one_hot_encode(seq):
     """
     Returns a one-hot encoded matrix representing
@@ -31,6 +41,26 @@ def one_hot_encode(seq):
     out = np.zeros((l, m))
     for i in range(l):
         out[i, pre_process.AA_IDX[seq[i]]] = 1
+    return out.flatten()
+
+
+def index_encode_neighbors(seq, shift=True):
+    """
+    Returns an integer vector where each entry represents
+    an index encoding of a particular pair of amino
+    acid at a pair of neighboring positions.
+    """
+    neighbors = [(i, i+1) for i in range(6)]
+    m = len(pre_process.AA_ORDER)
+    idx = np.reshape(np.arange(m ** 2, dtype=int), (m, m))
+    out = np.zeros(len(neighbors), dtype=int)
+    for i, (c1, c2) in enumerate(neighbors):
+        s1 = seq[c1]
+        s2 = seq[c2]
+        out[i] = idx[pre_process.AA_IDX[s1], pre_process.AA_IDX[s2]]
+    # Shift indices to avoid overlap with indices encoding independent sites.
+    if shift:
+        out = out + m
     return out.flatten()
 
 
@@ -50,6 +80,26 @@ def encode_neighbors(seq):
     return out.flatten()
 
 
+def index_encode_pairwise(seq, shift=True):
+    """
+    Returns an integer vector where each entry represents
+    an index encoding of a particular pair of amino
+    acid at a pair of positions.
+    """
+    combos = list(combinations(range(7), 2))
+    m = len(pre_process.AA_ORDER)
+    idx = np.reshape(np.arange(m ** 2, dtype=int), (m, m))
+    out = np.zeros(len(combos), dtype=int)
+    for i, (c1, c2) in enumerate(combos):
+        s1 = seq[c1]
+        s2 = seq[c2]
+        out[i] = idx[pre_process.AA_IDX[s1], pre_process.AA_IDX[s2]]
+    # Shift indices to avoid overlap with indices encoding independent sites.
+    if shift:
+        out = out + m
+    return out.flatten()
+
+
 def encode_pairwise(seq):
     """
     Returns a binary matrix where each entry represents
@@ -66,6 +116,17 @@ def encode_pairwise(seq):
     return out.flatten()
 
 
+def index_encode_is_plus_pairwise(seq):
+    """
+    Combines index encodings of independent sites
+    and pairwise terms into single integer vector.
+    """
+    indep_sites = index_encode(seq)
+    pairwise = index_encode_pairwise(seq)
+    both = np.concatenate((indep_sites, pairwise))
+    return both
+
+
 def encode_one_plus_pairwise(seq):
     """
     Combines the one-hot and pairwise encodings
@@ -74,6 +135,17 @@ def encode_one_plus_pairwise(seq):
     one_hot = one_hot_encode(seq)
     pairwise = encode_pairwise(seq)
     both = np.concatenate((one_hot, pairwise))
+    return both
+
+
+def index_encode_is_plus_neighbors(seq):
+    """
+    Combines index encodings of independent sites
+    and neighbor terms into single integer vector.
+    """
+    indep_sites = index_encode(seq)
+    neighbors = index_encode_neighbors(seq)
+    both = np.concatenate((indep_sites, neighbors))
     return both
 
 

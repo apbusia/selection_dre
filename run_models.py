@@ -54,12 +54,11 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
                  early_stopping=None, wandb=False, return_metrics=True, gradient_clip=None, savefile=None):
     eval_batch_size = 1024
     if encoding == 'pairwise':
-        encoding = data_prep.encode_one_plus_pairwise
+        encoding = data_prep.index_encode_is_plus_pairwise
     elif encoding == 'is':
-        encoding = data_prep.one_hot_encode
+        encoding = data_prep.index_encode
     elif encoding == 'neighbors':
-        encoding = data_prep.encode_one_plus_neighbors
-    input_shape = data_prep.get_example_encoding(encoding).shape
+        encoding = data_prep.index_encode_is_plus_neighbors
     
     if model_type in ['linear', 'ann']:
         pre_counts = pre_counts + 1
@@ -112,6 +111,7 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
         test_batch_size = min(eval_batch_size, len(test_idx))
         test_gen = modeling.get_dataset(seqs, test_idx, encoding, enrich_scores, classes, counts, batch_size=test_batch_size, shuffle=False)
     
+    input_shape = tuple(train_gen.element_spec[0].shape[1:])
     if model_type == 'linear':
         model = modeling.make_linear_model(input_shape, lr=lr, l2_reg=alpha, gradient_clip=gradient_clip)
     elif model_type == 'ann':
@@ -141,10 +141,14 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
                 pred = np.argmax(pred, axis=1)
                 truth = classes[train_idx]
                 use_classification_metrics = True
+                if np.amax(counts) == 1:
+                    counts = counts * max(np.amax(post_counts), np.amax(pre_counts))
+                sample_weight = counts[train_idx]
             else:
                 pred = pred.flatten()
                 truth = enrich_scores[train_idx][:,0]
-        train_metrics = evaluation_utils.get_eval_metrics(truth, pred, use_classification_metrics)
+                sample_weight = None
+        train_metrics = evaluation_utils.get_eval_metrics(truth, pred, use_classification_metrics, sample_weight)
 
         if test_gen is not None:
             with tf.device('/cpu:0'):
@@ -154,10 +158,11 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
                         np.save(savefile + '_test_logits.npy', pred)
                     pred = np.argmax(pred, axis=1)
                     truth = classes[test_idx]
+                    sample_weight = counts[test_idx]
                 else:
                     pred = pred.flatten()
                     truth = enrich_scores[test_idx][:,0]
-            test_metrics = evaluation_utils.get_eval_metrics(truth, pred, use_classification_metrics)
+            test_metrics = evaluation_utils.get_eval_metrics(truth, pred, use_classification_metrics, sample_weight)
             if savefile is not None:
                 test_pred_savefile = savefile + '_test_pred.npy'
                 np.save(test_pred_savefile, pred)
