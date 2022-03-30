@@ -90,7 +90,7 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
             # Reweight counts to avoid exploding gradients but preserve relative amounts in each pool.
             counts = counts / np.amax(counts)
         classes = np.array([0] * len(seqs) + [1] * len(seqs), int)
-        seqs = pd.concat([seqs, seqs.copy()])
+        seqs = pd.concat([seqs, seqs.copy()], ignore_index=True)
         monitor = 'val_weighted_sparse_categorical_crossentropy'
     
     disable_gpu(0)
