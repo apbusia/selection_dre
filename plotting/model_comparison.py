@@ -59,7 +59,7 @@ def make_culled_correlation_plot(results_df, out_dir, out_tag):
     palette, order = get_color_palette()
     reg_df, class_df = None, None
     for _, row in results_df.iterrows():
-        cur_df = {'fracs': row['culled_fracs'],  # np.arange(0, 1, 0.01),
+        cur_df = {'fracs': np.arange(0, 1, 0.01),  # row['culled_fracs'],
                   'culled_pearson': row['culled_pearson'],
                   'model': [row['model']] * len(row['culled_pearson'])}
         cur_df = pd.DataFrame(cur_df)
