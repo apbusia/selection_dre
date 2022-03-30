@@ -2,6 +2,7 @@ import os
 import sys
 sys.path.append('..')
 import argparse
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -53,6 +54,7 @@ def main(args):
     
     colors = sns.color_palette('flare', n_colors=5)
     fig, axes = plt.subplots(1, len(model_paths), figsize=(5 * len(model_paths), 4))
+    min_pred, max_pred = np.inf, -np.inf
     
     for i, model_path in enumerate(model_paths):
         disable_gpu(1)
@@ -75,6 +77,8 @@ def main(args):
             preds = logits_to_log_density_ratio(preds)
         else:
             preds = preds.flatten()
+        min_pred = min(np.amin(preds), min_pred)
+        max_pred = max(np.amax(preds), max_pred)
         
         ax = axes[i]
         ax.scatter(preds, titers, s=20, c=colors)
@@ -91,6 +95,9 @@ def main(args):
         spearman = get_spearmanr(titers, preds)
         plt.figtext((0.5 + i) / (len(model_paths)), -0.1, 'Pearson = {:0.2f},\nSpearman={:0.2f}'.format(pearson, spearman), ha='center', fontsize=10, bbox={'facecolor': 'gray', 'alpha': 0.5, 'pad': 5})
     
+    ep = 0.1
+    for ax in axes:
+        ax.set_xlim(min_pred - ep, max_pred + ep)
     plt.savefig(os.path.join(out_dir, '{}_titer_comparison_plot.png'.format(out_tag)), dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
     plt.close()
 
