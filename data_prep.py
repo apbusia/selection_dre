@@ -222,7 +222,7 @@ def featurize_and_transform(sequences, enrich_scores,
     return X, y, sample_weights
 
 
-def get_nnk_p():
+def get_nnk_p(n_aa=7):
     """
     Get NNK nucleotide probabilities.
     """
@@ -231,5 +231,5 @@ def get_nnk_p():
     p_nnk[2, pre_process.NUC_IDX['A']] = 0
     p_nnk[2, pre_process.NUC_IDX['C']] = 0
     p_nnk[2] *= 0.5
-    p_nnk = np.tile(p_nnk.T, 7).T
+    p_nnk = np.tile(p_nnk.T, n_aa).T
     return p_nnk
