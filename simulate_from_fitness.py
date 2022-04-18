@@ -15,12 +15,14 @@ def main(args):
     
     print('Using {} as fitness'.format(args.fitness_column))
     df = df[['seq', args.fitness_column]]
-    fitness = df[args.fitness_column]
+    fitness = df[args.fitness_column].values
+    if args.normalize:
+        fitness = (fitness - np.mean(fitness)) / np.std(fitness)
     
     print('Computing \'true\' library proportions...')
     # Draw initial library proportions from a Dirichlet.
     alpha = np.ones(len(df))
-    p = np.random.dirichlet(alpha)
+    p = np.random.dirichlet(args.dirichlet_concentration * alpha)
     df['pre_p'] = p
     # Compute post-selection proportions using initial proportions and fitness.
     p = np.exp(fitness) * p
@@ -51,8 +53,10 @@ if __name__ == '__main__':
     parser.add_argument('data_file', help='path to CSV file containing library fitnesses', type=str)
     parser.add_argument('fitness_column', help='column name in data_file', type=str)
     parser.add_argument('--total_reads', default=int(1e7), help='total number of reads to generate', type=int)
+    parser.add_argument('--dirichlet_concentration', default=1, help='(scalar) concentration parameter for Dirichlet dist', type=float)
     parser.add_argument('--n_replicates', default=1, help='number of replicates of count data to generate', type=int)
-    parser.add_argument('--shuffle', help='whether to save data in shuffled order', action='store_true')
+    parser.add_argument('--shuffle', help='save data in shuffled order', action='store_true')
+    parser.add_argument('--normalize', help='normalize fitness_column before simulating library proportions', action='store_true')
     parser.add_argument('--save_file', help='output path to which to save generated counts', type=str)
     args = parser.parse_args()
     main(args)

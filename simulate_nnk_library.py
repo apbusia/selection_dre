@@ -98,18 +98,16 @@ def generate_nnk_library(n_aa, n_variants):
 def main(args):
     np.random.seed(SEED)
     
-    save_path = args.save_file
-    if save_path is not None and os.path.exists(save_path):
-        raise IOError('Saved file already exists at {}. Choose another save_file.'.format(save_path))
-    
     # Generate list of variants.
-    seq_len = args.seq_length
-    n_variants = args.n_variants
-    print('Generating length {} NNK library of size {}...'.format(seq_len, n_variants))
-    library_df = pd.DataFrame({'seq': generate_nnk_library(seq_len, n_variants)})
-#     if args.load_file is not None:
-#         print('Loading library from file: {}'.format(args.load_file))
-#         library_df = pd.read_csv(args.load_file)
+    if args.load_file is not None:
+        print('Loading library from file: {}'.format(args.load_file))
+        library_df = pd.read_csv(args.load_file)
+    else:
+        seq_len = args.seq_length
+        n_variants = args.n_variants
+        print('Generating length {} NNK library of size {}...'.format(seq_len, n_variants))
+        library_df = pd.DataFrame({'seq': generate_nnk_library(seq_len, n_variants)})
+    
 
     # Compute simulated fitness values for variants.
     if args.nk_sizes is not None:
@@ -127,6 +125,7 @@ def main(args):
             library_df['ann_{}_fitness'.format(l)] = get_random_ann_fitness(l, args.ann_units, library_df['seq'])
     
     # Save simulated dataset to file.
+    save_path = args.save_file
     if args.save_file is not None:
         print('Saving library of {:.2e} simulated variants to {}'.format(len(library_df), args.save_file))
         library_df.to_csv(args.save_file, index=False)
@@ -142,5 +141,6 @@ if __name__ == '__main__':
     parser.add_argument('--nk_sizes', help='list of neighborhood sizes for NK models', nargs='+', type=int)
     parser.add_argument('--ann_sizes', help='list of layer counts for random neural network models', nargs='+', type=int)
     parser.add_argument('--ann_units', default=100, help='number of hidden units in each layer for random neural network models', type=int)
+    parser.add_argument('--load_file', help='library file to load and append additional fitness(es)', type=str)
     args = parser.parse_args()
     main(args)
