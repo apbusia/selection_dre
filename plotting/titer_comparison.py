@@ -23,10 +23,10 @@ def sci_notation(n, sig_fig=2):
     return str(n)
 
 
-def get_text_label(p, t):
-    if t < 2e4:
+def get_text_label(p, t, min_t=None, max_t=None):
+    if min_t is not None and t <= min_t:
         label = '({:0.2f}, {}, True Min)'
-    elif t > 1e12:
+    elif max_t is not None and t >= max_t:
         label = '({:0.2f}, {}, True Max)'
     else:
         label = '({:0.2f}, {})'
@@ -52,7 +52,7 @@ def main(args):
     df = pd.read_csv(data_path)
     seqs, titers = df['seq'], df['titer'].values
     
-    colors = sns.color_palette('flare', n_colors=5)
+    colors = sns.color_palette('flare', n_colors=len(seqs))
     fig, axes = plt.subplots(1, len(model_paths), figsize=(5 * len(model_paths), 4))
     min_pred, max_pred = np.inf, -np.inf
     
@@ -87,8 +87,9 @@ def main(args):
         ax.set_xlabel('Predicted Log Enrichment', fontsize=14)
         ax.set_title('{} {} Model vs. Titer'.format(get_model_name(model_path), get_task(model_path)), fontsize=14)
         
+        min_t, max_t = np.amin(titers), np.amax(titers)
         for p, t in zip(preds, titers):
-            label, xytext, ha = get_text_label(p, t)
+            label, xytext, ha = get_text_label(p, t, min_t, max_t)
             ax.annotate(label.format(p, sci_notation(t)), (p, t), textcoords='offset pixels', xytext=xytext, fontsize=10, ha=ha)
         
         pearson = get_pearsonr(titers, preds)
