@@ -7,6 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tensorflow import keras
+from matplotlib.lines import Line2D
 import data_prep
 from run_models import disable_gpu
 from evaluate_models import get_model_type, get_encoding_type, get_model_predictions, logits_to_log_density_ratio
@@ -52,7 +53,17 @@ def main(args):
     df = pd.read_csv(data_path)
     seqs, titers = df['seq'], df['titer'].values
     
-    colors = sns.color_palette('flare', n_colors=len(seqs))
+    if 'source' in df.columns:
+        unique_sources = pd.unique(df['source'])
+        int_source = list(df['source'].astype('category').cat.codes)
+        colors = sns.color_palette('Accent', n_colors=len(unique_sources))
+        legend_elements = [
+            Line2D([0], [0], marker='o', label=source, color=color, markersize=10, linewidth=0, linestyle='')
+            for source, color in zip(unique_sources, colors)]
+        colors = [colors[i] for i in int_source]
+    else:
+        colors = sns.color_palette('flare', n_colors=len(seqs))
+        legend_elements = None
     fig, axes = plt.subplots(1, len(model_paths), figsize=(5 * len(model_paths), 4))
     min_pred, max_pred = np.inf, -np.inf
     
@@ -87,10 +98,11 @@ def main(args):
         ax.set_xlabel('Predicted Log Enrichment', fontsize=14)
         ax.set_title('{} {} Model vs. Titer'.format(get_model_name(model_path), get_task(model_path)), fontsize=14)
         
-        min_t, max_t = np.amin(titers), np.amax(titers)
-        for p, t in zip(preds, titers):
-            label, xytext, ha = get_text_label(p, t, min_t, max_t)
-            ax.annotate(label.format(p, sci_notation(t)), (p, t), textcoords='offset pixels', xytext=xytext, fontsize=10, ha=ha)
+        if args.annotate_points:
+            min_t, max_t = np.amin(titers), np.amax(titers)
+            for p, t in zip(preds, titers):
+                label, xytext, ha = get_text_label(p, t, min_t, max_t)
+                ax.annotate(label.format(p, sci_notation(t)), (p, t), textcoords='offset pixels', xytext=xytext, fontsize=10, ha=ha)
         
         pearson = get_pearsonr(titers, preds)
         spearman = get_spearmanr(titers, preds)
@@ -99,6 +111,8 @@ def main(args):
     ep = 0.1
     for ax in axes:
         ax.set_xlim(min_pred - ep, max_pred + ep)
+    if legend_elements is not None:
+        fig.legend(handles=legend_elements, loc='center right', fontsize=12)
     plt.savefig(os.path.join(out_dir, '{}_titer_comparison_plot.png'.format(out_tag)), dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
     plt.close()
 
@@ -107,6 +121,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('data_path', help='path to (seq, titer) dataset', type=str)
     parser.add_argument('model_paths', help='path to trained Keras predictive model', nargs='+', type=str)
+    parser.add_argument('--annotate_points', help='whether to annotate each point plotted', action='store_true')
     parser.add_argument('--out_dir', help='directory to which to save the generated plots', type=str)
     parser.add_argument('--out_description', default='dre', help='descriptive tag to add to output filenames', type=str)
     args = parser.parse_args()
