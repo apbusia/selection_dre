@@ -59,7 +59,7 @@ def make_culled_correlation_plot(results_df, out_dir, out_tag):
     palette, order = get_color_palette()
     reg_df, class_df = None, None
     for _, row in results_df.iterrows():
-        cur_df = {'fracs': np.arange(0, 1, 0.01),  # row['culled_fracs'],
+        cur_df = {'fracs': row['fracs'],  # np.arange(0, 1, 0.01),
                   'culled_pearson': row['culled_pearson'],
                   'model': [row['model']] * len(row['culled_pearson'])}
         cur_df = pd.DataFrame(cur_df)
@@ -103,6 +103,43 @@ def make_correlation_barplots(results_df, out_dir, out_tag):
     plt.close()
 
 
+def make_culled_correlation_paired_plot(results_df, out_dir, out_tag):
+    fig, ax = plt.subplots(1, 1, figsize=(4, 2))
+    palette, order = get_color_palette()
+    reg_df, class_df = None, None
+    for _, row in results_df.iterrows():
+        cur_df = {'fracs': row['fracs'],  # np.arange(0, 1, 0.01),
+                  '{}_culled_pearson'.format(row['task']): row['culled_pearson'],
+                  'model': [row['model']] * len(row['culled_pearson'])}
+        cur_df = pd.DataFrame(cur_df)
+        if row['task'] == 'regression':
+            if reg_df is None:
+                reg_df = cur_df
+            else:
+                reg_df = reg_df.append(cur_df)
+        elif row['task'] == 'classification':
+            if class_df is None:
+                class_df = cur_df
+            else:
+                class_df = class_df.append(cur_df)
+    reg_df = reg_df.groupby(['model','fracs']).mean()
+    reg_df.reset_index(inplace=True)
+    class_df = class_df.groupby(['model','fracs']).mean()
+    class_df.reset_index(inplace=True)
+    plot_df = pd.merge(reg_df, class_df, how='outer')
+    plot_df['fracs'] = 1 - plot_df['fracs']  # For consistency with x-axis of culled correlation line plots above.
+    sns.scatterplot(data=plot_df, x='regression_culled_pearson', y='classification_culled_pearson', hue='model', size='fracs', sizes=(5, 100), palette=palette, hue_order=order, alpha=0.8, ax=ax, linewidth=0, edgecolor='none')
+    diag_x = np.linspace(min(plot_df['regression_culled_pearson'].min(), plot_df['classification_culled_pearson'].min()),
+                         min(plot_df['regression_culled_pearson'].max(), plot_df['classification_culled_pearson'].max()),
+                         10)
+    ax.plot(diag_x, diag_x, color='k', linestyle='dashed', linewidth=1)
+    ax.set_xlabel('Regression Pearson Correlation')
+    ax.set_ylabel('Classification Pearson Correlation')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.savefig(os.path.join(out_dir, '{}_culled_correlation_paired_plot.png'.format(out_tag)), dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
+    plt.close()
+
+
 def main(args):
     set_rc_params()
     out_dir = '../outputs' if args.out_dir is None else args.out_dir
@@ -115,7 +152,7 @@ def main(args):
         cur_df = pd.DataFrame(cur_results['metrics'])
         cur_df['model'] = pd.Series(cur_results['meta']['model_paths']).apply(get_model_name)
         cur_df['task'] = pd.Series(cur_results['meta']['model_paths']).apply(get_task)
-#         cur_df['fracs'] = pd.Series(cur_results['meta']['culled_fracs'])
+        cur_df['fracs'] = [cur_results['meta']['culled_fracs']] * len(cur_df)
         if results_df is None:
             results_df = cur_df
         else:
@@ -124,6 +161,7 @@ def main(args):
     
     make_culled_correlation_plot(results_df, out_dir, out_tag)
     make_correlation_barplots(results_df, out_dir, out_tag)
+    make_culled_correlation_paired_plot(results_df, out_dir, out_tag)
 
 
 if __name__ == '__main__':
