@@ -133,6 +133,8 @@ def main(args):
         results['meta']['culled_fracs'] = fracs
         culled_pearson = evaluation_utils.calculate_culled_correlation(preds, truth, fracs)
         results['metrics']['culled_pearson'].append(culled_pearson)
+        culled_spearman = evaluation_utils.calculate_culled_correlation(preds, truth, fracs, correlation_type='spearman')
+        results['metrics']['culled_spearman'].append(culled_spearman)
 
     print('\nFinal evaluation metrics:')
     evaluation_utils.print_eval_metrics(results['metrics'])
