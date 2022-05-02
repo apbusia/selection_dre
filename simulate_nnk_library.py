@@ -63,6 +63,25 @@ def get_block_nk_fitness(k, seq_series):
         fitness += k * get_subsequence_fitness(neighbors, seq_series)
     return fitness
 
+
+def get_epistatic_fitness(p, seq_series):
+    fitness = np.zeros(len(seq_series))
+    seq_len = len(seq_series[0])
+    # Always include independent sites.
+    for i in range(seq_len):
+        fitness += get_subsequence_fitness([i], seq_series)
+    # Include p% of epistatic terms, randomly sampled.
+    # Poelwijk Fig 2 suggests epistatic order is a bell-curve centered on third order.
+    n_terms = int(np.around(p * 2 ** seq_len))
+    epistatic_orders, counts = np.unique(np.random.normal(loc=3, scale=1, size=n_terms).round(), return_counts=True)
+    for i, order in enumerate(epistatic_orders):
+        if order > 1 and order <= seq_len:
+            neighborhoods = [np.random.choice(seq_len, int(order), replace=False) for _ in range(counts[i])]
+            #neighborhoods = np.unique(neighborhoods, axis=0)
+            for neighborhood in neighborhoods:
+                fitness += get_subsequence_fitness(np.sort(neighborhood), seq_series)
+    return fitness
+
     
 def get_random_ann_fitness(n_layers, n_units, sequences, batch_size=1024):
     keras.backend.clear_session()
@@ -118,6 +137,11 @@ def main(args):
                 library_df['nk_{}_fitness'.format(k)] = get_random_nk_fitness(k, library_df['seq'])
             print('\tComputing NK model with size {} block neighborhoods'.format(k))
             library_df['block_{}_fitness'.format(k)] = get_block_nk_fitness(k, library_df['seq'])
+    if args.epistatic_props is not None:
+        print('Simulating linear epistatic fitness values...')
+        for p in args.epistatic_props:
+            print('\tComputing epistatic model with {} proportion of epistatic terms'.format(p))
+            library_df['epistatic_{}_fitness'.format(p)] = get_epistatic_fitness(p, library_df['seq'])
     if args.ann_sizes is not None:
         print('Simulating neural network fitness values...')
         for l in args.ann_sizes:
@@ -130,8 +154,6 @@ def main(args):
         print('Saving library of {:.2e} simulated variants to {}'.format(len(library_df), args.save_file))
         library_df.to_csv(args.save_file, index=False)
 
-    
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -139,6 +161,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_variants', default=int(8e6), help='number of unique variants to generate', type=int)
     parser.add_argument('--save_file', help='output path to which to save generated counts', type=str)
     parser.add_argument('--nk_sizes', help='list of neighborhood sizes for NK models', nargs='+', type=int)
+    parser.add_argument('--epistatic_props', help='list of proportions of terms to include for linear epistatic models', nargs='+', type=float)
     parser.add_argument('--ann_sizes', help='list of layer counts for random neural network models', nargs='+', type=int)
     parser.add_argument('--ann_units', default=100, help='number of hidden units in each layer for random neural network models', type=int)
     parser.add_argument('--load_file', help='library file to load and append additional fitness(es)', type=str)
