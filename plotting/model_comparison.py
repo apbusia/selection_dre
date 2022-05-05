@@ -136,7 +136,7 @@ def make_culled_correlation_paired_plot(results_df, out_dir, out_tag, corr_type)
     ax.set_xlabel('Regression {} Correlation'.format(corr_type.capitalize()))
     ax.set_ylabel('Classification {} Correlation'.format(corr_type.capitalize()))
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    plt.savefig(os.path.join(out_dir, '{}_culled_correlation_paired_plot.png'.format(out_tag)), dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
+    plt.savefig(os.path.join(out_dir, '{}_culled_{}_paired_plot.png'.format(out_tag, corr_type)), dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
     plt.close()
 
 
@@ -163,6 +163,7 @@ def main(args):
     make_culled_correlation_plot(results_df, out_dir, out_tag, corr_type)
     make_correlation_barplots(results_df, out_dir, out_tag)
     make_culled_correlation_paired_plot(results_df, out_dir, out_tag, corr_type)
+    make_culled_correlation_paired_plot(results_df, out_dir, out_tag, 'ndcg')
 
 
 if __name__ == '__main__':

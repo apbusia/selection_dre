@@ -77,7 +77,7 @@ def get_epistatic_fitness(p, seq_series):
     for i, order in enumerate(epistatic_orders):
         if order > 1 and order <= seq_len:
             neighborhoods = [np.random.choice(seq_len, int(order), replace=False) for _ in range(counts[i])]
-            #neighborhoods = np.unique(neighborhoods, axis=0)
+            neighborhoods = np.unique(np.sort(neighborhoods), axis=0)
             for neighborhood in neighborhoods:
                 fitness += get_subsequence_fitness(np.sort(neighborhood), seq_series)
     return fitness

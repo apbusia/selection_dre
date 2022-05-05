@@ -179,3 +179,23 @@ def calculate_culled_correlation(ypred, ytest, fracs, correlation_type='pearson'
         c = get_pearsonr(ytest_frac, ypred_frac)
         corrs.append(c)
     return corrs
+
+
+def calculate_culled_ndcg(ypred, ytest, fracs):
+    """
+    Calculates Normalized Discounted Cumulative Gain between predictions and true fitness values
+    among subsets of test data. In particular, test data is succesively culled to only
+    include the largest true fitness values.
+    """
+    ndcgs = []
+    n_test = len(ypred)
+    y_test = ytest[:n_test]
+    sorted_test_idx = np.argsort(y_test)
+    ypred = np.expand_dims(ypred, axis=0)
+    ytest = np.expand_dims(ytest, axis=0)
+    for i in range(len(fracs)):
+        num_frac = int(n_test * fracs[i])
+        top_k = n_test - num_frac
+        ndcg = metrics.ndcg_score(ytest, ypred, k=top_k)
+        ndcgs.append(ndcg)
+    return ndcgs

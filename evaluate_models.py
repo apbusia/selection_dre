@@ -135,6 +135,9 @@ def main(args):
         results['metrics']['culled_pearson'].append(culled_pearson)
         culled_spearman = evaluation_utils.calculate_culled_correlation(preds, truth, fracs, correlation_type='spearman')
         results['metrics']['culled_spearman'].append(culled_spearman)
+        # NDCG expects positive groundtruth, so pass enrichment instead of log-enrichment.
+        culled_ndcg = evaluation_utils.calculate_culled_ndcg(np.exp(preds), np.exp(truth), fracs)
+        results['metrics']['culled_ndcg'].append(culled_ndcg)
 
     print('\nFinal evaluation metrics:')
     evaluation_utils.print_eval_metrics(results['metrics'])
