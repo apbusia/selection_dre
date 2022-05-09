@@ -89,7 +89,7 @@ def main(args):
     
     results['metrics'] = defaultdict(list)
     for i, model_path in enumerate(model_paths):
-        disable_gpu(1)
+        disable_gpu([0, 1])
         keras.backend.clear_session()
         
         print('\nUsing model {}'.format(model_path))

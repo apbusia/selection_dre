@@ -34,17 +34,24 @@ def get_savefile(args):
     return savefile
 
 
-def disable_gpu(ind):
+def disable_gpu(ind_list):
+    # Convert integer argument for backwards compatibility.
+    if type(ind_list) == int:
+        ind_list = [ind_list]
     physical_devices = tf.config.list_physical_devices('GPU')
+    n_physical_devices = len(physical_devices)
+    ind_list.sort(reverse=True)
     try:
         # Disable GPU
-        del physical_devices[ind]
+        for ind in ind_list:
+            del physical_devices[ind]
         tf.config.set_visible_devices(physical_devices, 'GPU')
         logical_devices = tf.config.list_logical_devices('GPU')
         # Logical device was not created for specified GPU
-        assert len(logical_devices) == len(physical_devices) - 1
+        assert len(logical_devices) == n_physical_devices - len(ind_list)
     except:
         # Invalid device or cannot modify virtual devices once initialized.
+        print('Unable to disable GPU ', ind_list)
         pass
 
 
@@ -86,6 +93,7 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
         if test_idx is not None:
             test_idx = np.concatenate([test_idx, np.array(test_idx) + len(seqs)])
         counts = np.concatenate([pre_counts, post_counts])
+#         counts = counts + 1  # Use same pseudo-count scheme as for regression models for consistency.
         if normalize:
             # Reweight counts to avoid exploding gradients but preserve relative amounts in each pool.
             counts = counts / np.amax(counts)
