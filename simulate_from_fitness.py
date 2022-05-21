@@ -73,7 +73,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('data_file', help='path to CSV file containing library fitnesses', type=str)
     parser.add_argument('fitness_column', help='column name in data_file', type=str)
-    parser.add_argument('--total_reads', default=int(1e7), help='total number of reads to generate', type=int)
+    parser.add_argument('--total_reads', default=int(4.6e7), help='total number of reads to generate', type=int)
     parser.add_argument('--dirichlet_concentration', default=1, help='(scalar) concentration parameter for Dirichlet dist', type=float)
     parser.add_argument('--n_replicates', default=1, help='number of replicates of count data to generate', type=int)
     parser.add_argument('--shuffle', help='save data in shuffled order', action='store_true')

@@ -23,10 +23,10 @@ def get_subsequence(positions, seq_series):
     return subseq_series
 
 
-def get_subsequence_fitness(neighborhood, seq_series):
+def get_subsequence_fitness(neighborhood, seq_series, scale=1.):
     subseq_series = get_subsequence(neighborhood, seq_series)
     unique_subseq = subseq_series.unique()
-    subseq_fitness = dict(zip(unique_subseq, np.random.normal(size=len(unique_subseq))))
+    subseq_fitness = dict(zip(unique_subseq, np.random.normal(size=len(unique_subseq), scale=scale)))
     return subseq_series.map(subseq_fitness)
 
 
@@ -69,17 +69,17 @@ def get_epistatic_fitness(p, seq_series):
     seq_len = len(seq_series[0])
     # Always include independent sites.
     for i in range(seq_len):
-        fitness += get_subsequence_fitness([i], seq_series)
-    # Include p% of epistatic terms, randomly sampled.
+        fitness += get_subsequence_fitness([i], seq_series, scale=0.5)
+    # Include p epistatic terms, randomly sampled.
     # Poelwijk Fig 2 suggests epistatic order is a bell-curve centered on third order.
-    n_terms = int(np.around(p * 2 ** seq_len))
-    epistatic_orders, counts = np.unique(np.random.normal(loc=3, scale=1, size=n_terms).round(), return_counts=True)
+    n_terms = int(p)
+    epistatic_orders, counts = np.unique(np.random.normal(loc=3, scale=0.5, size=n_terms).round(), return_counts=True)
     for i, order in enumerate(epistatic_orders):
         if order > 1 and order <= seq_len:
             neighborhoods = [np.random.choice(seq_len, int(order), replace=False) for _ in range(counts[i])]
             neighborhoods = np.unique(np.sort(neighborhoods), axis=0)
             for neighborhood in neighborhoods:
-                fitness += get_subsequence_fitness(np.sort(neighborhood), seq_series)
+                fitness += get_subsequence_fitness(np.sort(neighborhood), seq_series, scale=2**(-int(order)))
     return fitness
 
     
@@ -137,10 +137,10 @@ def main(args):
                 library_df['nk_{}_fitness'.format(k)] = get_random_nk_fitness(k, library_df['seq'])
             print('\tComputing NK model with size {} block neighborhoods'.format(k))
             library_df['block_{}_fitness'.format(k)] = get_block_nk_fitness(k, library_df['seq'])
-    if args.epistatic_props is not None:
+    if args.epistatic_terms is not None:
         print('Simulating linear epistatic fitness values...')
-        for p in args.epistatic_props:
-            print('\tComputing epistatic model with {} proportion of epistatic terms'.format(p))
+        for p in args.epistatic_terms:
+            print('\tComputing epistatic model with {} epistatic terms'.format(p))
             library_df['epistatic_{}_fitness'.format(p)] = get_epistatic_fitness(p, library_df['seq'])
     if args.ann_sizes is not None:
         print('Simulating neural network fitness values...')
@@ -158,10 +158,10 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--seq_length', default=7, help='number of amino acids to generate per sequence', type=int)
-    parser.add_argument('--n_variants', default=int(8e6), help='number of unique variants to generate', type=int)
+    parser.add_argument('--n_variants', default=int(8.6e6), help='number of unique variants to generate', type=int)
     parser.add_argument('--save_file', help='output path to which to save generated counts', type=str)
     parser.add_argument('--nk_sizes', help='list of neighborhood sizes for NK models', nargs='+', type=int)
-    parser.add_argument('--epistatic_props', help='list of proportions of terms to include for linear epistatic models', nargs='+', type=float)
+    parser.add_argument('--epistatic_terms', help='list of number of terms to include for linear epistatic models', nargs='+', type=int)
     parser.add_argument('--ann_sizes', help='list of layer counts for random neural network models', nargs='+', type=int)
     parser.add_argument('--ann_units', default=100, help='number of hidden units in each layer for random neural network models', type=int)
     parser.add_argument('--load_file', help='library file to load and append additional fitness(es)', type=str)
