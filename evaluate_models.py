@@ -131,13 +131,20 @@ def main(args):
             results['metrics'][k].append(metrics[k])
         fracs = np.arange(0, 1, 0.01)
         results['meta']['culled_fracs'] = fracs
-        culled_pearson = evaluation_utils.calculate_culled_correlation(preds, truth, fracs)
-        results['metrics']['culled_pearson'].append(culled_pearson)
-        culled_spearman = evaluation_utils.calculate_culled_correlation(preds, truth, fracs, correlation_type='spearman')
-        results['metrics']['culled_spearman'].append(culled_spearman)
-        # NDCG expects positive groundtruth, so pass enrichment instead of log-enrichment.
-        culled_ndcg = evaluation_utils.calculate_culled_ndcg(np.exp(preds), np.exp(truth), fracs)
-        results['metrics']['culled_ndcg'].append(culled_ndcg)
+        results['metrics']['culled_pearson'].append(
+            evaluation_utils.calculate_culled_correlation(preds, truth, fracs))
+        results['metrics']['culled_spearman'].append(
+            evaluation_utils.calculate_culled_correlation(preds, truth, fracs, correlation_type='spearman'))
+        results['metrics']['culled_mse'].append(
+            evaluation_utils.calculate_culled_correlation(preds, truth, fracs, correlation_type='mse'))
+        try:
+            # NDCG expects positive groundtruth, so pass enrichment instead of log-enrichment.
+            culled_ndcg = evaluation_utils.calculate_culled_ndcg(np.exp(preds), np.exp(truth), fracs)
+            results['metrics']['culled_ndcg'].append(culled_ndcg)
+        except:
+            # NDCG fails when predictions are very large and np.exp(.) overflows.
+            print('\n\tUnable to compute culled NDCG.')
+            pass
 
     print('\nFinal evaluation metrics:')
     evaluation_utils.print_eval_metrics(results['metrics'])

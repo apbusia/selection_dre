@@ -160,13 +160,18 @@ def make_errorbar_plot(xticks, vals, std_errs, title, figsize=(15,5), ylim=None)
 
 def calculate_culled_correlation(ypred, ytest, fracs, correlation_type='pearson'):
     """
-    Calculates the pearson correlation between predictions and true fitness values
+    Calculates the correlation between predictions and true fitness values
     among subsets of test data. In particular, test data is succesively culled to only
     include the largest true fitness values.
     """
-    if correlation_type not in ['pearson', 'spearman']:
+    if correlation_type not in ['pearson', 'spearman', 'mse']:
         raise NotImplementedError('culled correlations not implemented for correlation_type={}'.format(correlation_type))
-    get_correlation = get_pearsonr if correlation_type == 'pearson' else get_spearmanr
+    if correlation_type == 'mse':
+        get_correlation = metrics.mean_squared_error
+    elif correlation_type == 'pearson':
+        get_correlation = get_pearsonr
+    else:
+        get_correlation = get_spearmanr
     corrs = []
     n_test = len(ypred)
     y_test = ytest[:n_test]
@@ -176,7 +181,7 @@ def calculate_culled_correlation(ypred, ytest, fracs, correlation_type='pearson'
         idx = sorted_test_idx[num_frac:]
         ypred_frac = ypred[idx]
         ytest_frac = ytest[idx]
-        c = get_pearsonr(ytest_frac, ypred_frac)
+        c = get_correlation(ytest_frac, ypred_frac)
         corrs.append(c)
     return corrs
 
