@@ -52,9 +52,9 @@ def main(args):
     df['post_p'] = p
     df['true_enrichment'] = np.log(df['post_p'].values / df['pre_p'].values)
     
-    print('Sampling sequence counts...')
     N_pre = args.total_reads
     N_post = args.total_reads
+    print('Sampling sequence counts ({:.1e} reads)...'.format(N_pre))
     for i in range(args.n_replicates):
         df['pre_count_{}'.format(i)] = np.random.multinomial(N_pre, df['pre_p'].values)
         df['post_count_{}'.format(i)] = np.random.multinomial(N_post, df['post_p'].values)
