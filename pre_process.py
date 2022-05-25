@@ -15,7 +15,7 @@ from collections import Counter
 
 # Firmly set the indexing of nucleotides and amino acids
 NUC_ORDER = ['A', 'T', 'C', 'G']
-AA_ORDER = [k.upper() for k in SequenceTools.protein2codon_.keys()]
+AA_ORDER = ['L', 'S', 'R', 'V', 'A', 'P', 'T', 'G', '*', 'I', 'Y', 'F', 'C', 'H', 'Q', 'N', 'K', 'D', 'E', 'W', 'M', '-']
 
 NUC_IDX = {NUC_ORDER[i]: i for i in range(len(NUC_ORDER))}
 AA_IDX = {AA_ORDER[i]: i for i in range(len(AA_ORDER))}
