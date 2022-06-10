@@ -102,15 +102,66 @@ def make_culled_correlation_plot(results_df, out_dir, out_tag, corr_type, includ
 
 
 def make_correlation_barplots(results_df, out_dir, out_tag, include_cnn=False):
-    f, axes = plt.subplots(1, 2, figsize=(8, 3), sharey=True)
+    f, axes = plt.subplots(1, 3, figsize=(12, 3))
     palette, order = get_color_palette(include_cnn)
     sns.barplot(data=results_df, x='task', y='pearson_r', hue='model', palette=palette, hue_order=order, ax=axes[0])
     axes[0].legend_.remove()
-    sns.barplot(data=results_df, x='task', y='spearman_r', hue='model', palette=palette, hue_order=order, ax=axes[1])
+    axes[0].set_ylim(-1, 1)
     axes[0].set_title('Pearson Correlation')
+    sns.barplot(data=results_df, x='task', y='spearman_r', hue='model', palette=palette, hue_order=order, ax=axes[1])
+    axes[1].legend_.remove()
+    axes[1].set_ylim(-1, 1)
     axes[1].set_title('Spearman Correlation')
+    sns.barplot(data=results_df, x='task', y='mse', hue='model', palette=palette, hue_order=order, ax=axes[2])
+    axes[2].set_title('Mean Squared Error')
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.savefig(os.path.join(out_dir, '{}_model_comparison_barplot.png'.format(out_tag)), dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
+    plt.close()
+
+
+def make_correlation_paired_plots(results_df, out_dir, out_tag, include_cnn=False):
+    f, axes = plt.subplots(1, 3, figsize=(12, 3))
+    palette, order = get_color_palette(include_cnn)
+    metrics = ['pearson_r', 'spearman_r', 'mse']
+    reg_df, class_df = None, None
+    for _, row in results_df.iterrows():
+        cur_df = {'{}_{}'.format(row['task'], metric): row[metric] for metric in metrics}
+        cur_df['model'] = [row['model']] #* len(row[metric])
+        cur_df = pd.DataFrame(cur_df)
+        if row['task'] == 'regression':
+            if reg_df is None:
+                reg_df = cur_df
+            else:
+                reg_df = reg_df.append(cur_df)
+        elif row['task'] == 'classification':
+            if class_df is None:
+                class_df = cur_df
+            else:
+                class_df = class_df.append(cur_df)
+    reg_gb = reg_df.groupby(['model'])
+    reg_df = pd.merge(reg_gb.mean().reset_index(), reg_gb.std().reset_index(), on='model', how='inner', suffixes=('', '_std'))
+    class_gb = class_df.groupby(['model'])
+    class_df = pd.merge(class_gb.mean().reset_index(), class_gb.std().reset_index(), on='model', how='inner', suffixes=('', '_std'))
+    plot_df = pd.merge(reg_df, class_df, on='model', how='inner')
+    for i, metric in enumerate(metrics):
+        ax = axes[i]
+        sns.scatterplot(data=plot_df, x='regression_{}'.format(metric), y='classification_{}'.format(metric), hue='model', palette=palette, hue_order=order, alpha=0.8, ax=ax, linewidth=0, edgecolor='none')
+        ax.errorbar(data=plot_df, x='regression_{}'.format(metric), y='classification_{}'.format(metric), yerr='classification_{}_std'.format(metric), xerr='regression_{}_std'.format(metric), fmt='none', ecolor='k')
+        diag_x = np.linspace(min(plot_df['regression_{}'.format(metric)].min(), plot_df['classification_{}'.format(metric)].min()),
+                             min(plot_df['regression_{}'.format(metric)].max(), plot_df['classification_{}'.format(metric)].max()),
+                             10)
+        ax.plot(diag_x, diag_x, color='k', linestyle='dashed', linewidth=1)
+        tag = 'MSE'
+        if metric == 'pearson_r':
+            tag = 'Pearson'
+        if metric == 'spearman_r':
+            tag = 'Spearman'
+        ax.set_xlabel('Regression {}'.format(tag))
+        ax.set_ylabel('Classification {}'.format(tag))
+        if i < len(axes) - 1:
+            ax.legend_.remove()
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.).get_texts()[-1].set_text('Error Bars')
+    plt.savefig(os.path.join(out_dir, '{}_model_comparison_paired_plot.png'.format(out_tag)), dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
     plt.close()
 
 
@@ -174,6 +225,7 @@ def main(args):
     
     make_culled_correlation_plot(results_df, out_dir, out_tag, corr_type, include_cnn)
     make_correlation_barplots(results_df, out_dir, out_tag, include_cnn)
+    make_correlation_paired_plots(results_df, out_dir, out_tag, include_cnn)
     if corr_type == 'ndcg':
         make_culled_correlation_paired_plot(results_df, out_dir, out_tag, 'ndcg', include_cnn)
     else:
