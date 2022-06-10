@@ -29,6 +29,12 @@ def get_model_name(model_path):
     if 'ann' in model_path:
         n_units = re.search('(?<=ann_)(classifier_)?(\d+)x(\d+)', model_path).group(3)
         return 'NN, {}'.format(n_units)
+    if 'cnn' in model_path:
+        match = re.search('(?<=cnn_)(classifier_)?(\d+)x(\d+)x(\d+)', model_path)
+        n_layers = match.group(2)
+        win_size = match.group(3)
+        n_units = match.group(4)
+        return 'CNN, {}x{}x{}'.format(n_layers, win_size, n_units)
 
 
 def get_task(model_path):
@@ -46,17 +52,22 @@ def get_encoding_type(model_path):
         return 'IS'
 
 
-def get_color_palette():
+def get_color_palette(include_cnn=False):
     linear_palette = sns.color_palette('crest', n_colors=3)
     ann_palette = sns.color_palette('flare', n_colors=4)
+    palette = linear_palette + ann_palette
     order = [
         'Linear, IS', 'Linear, Neighbors', 'Linear, Pairwise', 'NN, 100', 'NN, 200', 'NN, 500', 'NN, 1000']
-    return linear_palette + ann_palette, order
+    if include_cnn:
+        cnn_palette = sns.color_palette('pink_r', n_colors=4)
+        palette = palette + cnn_palette
+        order = order + ['CNN, 2x5x100', 'CNN, 4x5x100', 'CNN, 8x5x100', 'CNN, 16x5x100']
+    return palette, order
 
 
-def make_culled_correlation_plot(results_df, out_dir, out_tag, corr_type):
+def make_culled_correlation_plot(results_df, out_dir, out_tag, corr_type, include_cnn=False):
     fig, axes = plt.subplots(1, 2, figsize=(8, 3), sharey=True)
-    palette, order = get_color_palette()
+    palette, order = get_color_palette(include_cnn)
     reg_df, class_df = None, None
     for _, row in results_df.iterrows():
         cur_df = {'fracs': row['fracs'],  # np.arange(0, 1, 0.01),
@@ -90,9 +101,9 @@ def make_culled_correlation_plot(results_df, out_dir, out_tag, corr_type):
     plt.close()
 
 
-def make_correlation_barplots(results_df, out_dir, out_tag):
+def make_correlation_barplots(results_df, out_dir, out_tag, include_cnn=False):
     f, axes = plt.subplots(1, 2, figsize=(8, 3), sharey=True)
-    palette, order = get_color_palette()
+    palette, order = get_color_palette(include_cnn)
     sns.barplot(data=results_df, x='task', y='pearson_r', hue='model', palette=palette, hue_order=order, ax=axes[0])
     axes[0].legend_.remove()
     sns.barplot(data=results_df, x='task', y='spearman_r', hue='model', palette=palette, hue_order=order, ax=axes[1])
@@ -103,9 +114,9 @@ def make_correlation_barplots(results_df, out_dir, out_tag):
     plt.close()
 
 
-def make_culled_correlation_paired_plot(results_df, out_dir, out_tag, corr_type):
+def make_culled_correlation_paired_plot(results_df, out_dir, out_tag, corr_type, include_cnn=False):
     fig, ax = plt.subplots(1, 1, figsize=(4, 2))
-    palette, order = get_color_palette()
+    palette, order = get_color_palette(include_cnn)
     reg_df, class_df = None, None
     for _, row in results_df.iterrows():
         cur_df = {'fracs': row['fracs'],  # np.arange(0, 1, 0.01),
@@ -145,6 +156,7 @@ def main(args):
     out_dir = '../outputs' if args.out_dir is None else args.out_dir
     out_tag = args.out_description
     corr_type = args.correlation
+    include_cnn = args.include_cnn
     
     results_df = None
     results_files = args.results_files
@@ -160,12 +172,12 @@ def main(args):
             results_df = results_df.append(cur_df)
     results_df.reset_index(inplace=True)
     
-    make_culled_correlation_plot(results_df, out_dir, out_tag, corr_type)
-    make_correlation_barplots(results_df, out_dir, out_tag)
+    make_culled_correlation_plot(results_df, out_dir, out_tag, corr_type, include_cnn)
+    make_correlation_barplots(results_df, out_dir, out_tag, include_cnn)
     if corr_type == 'ndcg':
-        make_culled_correlation_paired_plot(results_df, out_dir, out_tag, 'ndcg')
+        make_culled_correlation_paired_plot(results_df, out_dir, out_tag, 'ndcg', include_cnn)
     else:
-        make_culled_correlation_paired_plot(results_df, out_dir, out_tag, corr_type)
+        make_culled_correlation_paired_plot(results_df, out_dir, out_tag, corr_type, include_cnn)
 
 
 if __name__ == '__main__':
@@ -174,5 +186,6 @@ if __name__ == '__main__':
     parser.add_argument('--out_dir', help='directory to which to save the generated plots', type=str)
     parser.add_argument('--out_description', default='dre', help='descriptive tag to add to output filenames', type=str)
     parser.add_argument('--correlation', default='pearson', help='type of correlation to plot', type=str)
+    parser.add_argument('--include_cnn', help='include convolutional architectures in plots', action='store_true')
     args = parser.parse_args()
     main(args)

@@ -22,6 +22,10 @@ def get_model_type(model_path):
         return 'logistic_ann'
     if 'ann' in model_path:
         return 'ann'
+    if 'cnn_classifier' in model_path:
+        return 'logistic_cnn'
+    if 'cnn' in model_path:
+        return 'cnn'
     raise ValueError('model type not identified from path: {}'.format(model_path))
 
 
@@ -37,16 +41,17 @@ def get_encoding_type(model_path):
 
 def get_model_predictions(model, model_type, seqs, encoding, batch_size=256):
     n_samples = len(seqs)
-    if model_type in ['linear', 'ann']:
+    if model_type in ['linear', 'ann', 'cnn']:
         enrich_scores = np.zeros((n_samples, 2))
         classes = None
         counts = None
-    elif model_type in ['logistic_linear', 'logistic_ann']:
+    elif model_type in ['logistic_linear', 'logistic_ann', 'logistic_cnn']:
         enrich_scores = None
         classes = np.zeros(n_samples)
         counts = np.ones(n_samples)
+    flatten = False if 'cnn' in model_type else True
     xgen = modeling.get_dataset(
-        seqs, np.arange(n_samples), encoding, enrich_scores, classes, counts, batch_size=batch_size, shuffle=False)
+        seqs, np.arange(n_samples), encoding, enrich_scores, classes, counts, batch_size=batch_size, shuffle=False, flatten=flatten)
 #     with tf.device('/cpu:0'):
 #         predictions = model.predict(xgen)
     predictions = model.predict(xgen)
