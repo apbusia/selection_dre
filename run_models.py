@@ -125,7 +125,6 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
         test_batch_size = min(eval_batch_size, len(test_idx))
         test_gen = modeling.get_dataset(seqs, test_idx, encoding, enrich_scores, classes, counts, batch_size=test_batch_size, shuffle=False, flatten=flatten)
     
-    # TODO: for variable length I need input_shape=(None,). Will be needed for adding short read data.
     input_shape = tuple(train_gen.element_spec[0].shape[1:])
     if model_type == 'linear':
         model = modeling.make_linear_model(input_shape, lr=lr, l2_reg=alpha, gradient_clip=gradient_clip)

@@ -148,7 +148,8 @@ def make_cnn_model(input_shape, num_hid=2, hid_size=100, win_size=2, residual_ch
     Builds a convolutional neural network model for regression.
     """
     reg = get_regularizer(l1_reg, l2_reg)
-    inp = tfkl.Input(shape=input_shape)
+    variable_len_shape = (None, input_shape[-1])
+    inp = tfkl.Input(shape=variable_len_shape)
     z = inp
     outputs = []
     
@@ -184,7 +185,8 @@ def make_cnn_classifier(input_shape, num_hid=2, hid_size=100, win_size=2, residu
     Builds a convolutional neural network model for classification.
     """
     reg = get_regularizer(l1_reg, l2_reg)
-    inp = tfkl.Input(shape=input_shape)
+    variable_len_shape = (None, input_shape[-1])
+    inp = tfkl.Input(shape=variable_len_shape)
     z = inp
     outputs = []
     
