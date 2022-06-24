@@ -17,6 +17,18 @@ def quantile_normalization(df):
     return df.rank(method='average').stack().map(rank_mean).unstack()
 
 
+def simulate_true_proportions(fitness, dirichlet_concentration=1):
+    # Draw initial library proportions from a Dirichlet.
+    alpha = np.ones(len(fitness))
+    pre_p = np.random.dirichlet(dirichlet_concentration * alpha)
+    # Compute post-selection proportions using initial proportions and fitness.
+    post_p = np.exp(fitness) * pre_p
+    # If needed, rescale so post-selection proportions sum to 1 and recompute 'true' fitness.
+    post_p = post_p / np.sum(post_p)
+    true_enrichment = np.log(post_p / pre_p)
+    return pre_p, post_p, true_enrichment
+
+
 def main(args):
     np.random.seed(SEED)
     
@@ -41,16 +53,10 @@ def main(args):
         fitness = (fitness - np.mean(fitness)) / np.std(fitness)
     
     print('Computing \'true\' library proportions...')
-    # Draw initial library proportions from a Dirichlet.
-    alpha = np.ones(len(df))
-    p = np.random.dirichlet(args.dirichlet_concentration * alpha)
-    df['pre_p'] = p
-    # Compute post-selection proportions using initial proportions and fitness.
-    p = np.exp(fitness) * p
-    # If needed, rescale so post-selection proportions sum to 1 and recomputed 'true' fitness.
-    p = p / np.sum(p)
-    df['post_p'] = p
-    df['true_enrichment'] = np.log(df['post_p'].values / df['pre_p'].values)
+    pre_p, post_p, true_enrichment = simulate_true_proportions(fitness, args.dirichlet_concentration)
+    df['pre_p'] = pre_p
+    df['post_p'] = post_p
+    df['true_enrichment'] = true_enrichment
     
     N_pre = args.total_reads
     N_post = args.total_reads
