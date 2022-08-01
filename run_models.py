@@ -121,9 +121,6 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
         callbacks = [es_callback] if callbacks is None else callbacks + [es_callback]
         val_batch_size = min(eval_batch_size, len(val_idx))
         val_gen = modeling.get_dataset(seqs, val_idx, encoding, enrich_scores, classes, counts, batch_size=val_batch_size, shuffle=False, flatten=flatten)
-    if test_idx is not None:
-        test_batch_size = min(eval_batch_size, len(test_idx))
-        test_gen = modeling.get_dataset(seqs, test_idx, encoding, enrich_scores, classes, counts, batch_size=test_batch_size, shuffle=False, flatten=flatten)
     
     input_shape = tuple(train_gen.element_spec[0].shape[1:])
     if model_type == 'linear':
@@ -151,8 +148,8 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
     train_metrics, test_metrics = None, None
     if return_metrics:
         print('\nStarting evaluation...')
-        train_gen = modeling.get_dataset(seqs, train_idx, encoding, enrich_scores, classes, counts, batch_size=eval_batch_size, shuffle=False, flatten=flatten)
         with tf.device('/cpu:0'):
+            train_gen = modeling.get_dataset(seqs, train_idx, encoding, enrich_scores, classes, counts, batch_size=eval_batch_size, shuffle=False, flatten=flatten)
             pred = model.predict(train_gen)
             use_classification_metrics = False
             if 'logistic' in model_type:
@@ -168,8 +165,10 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
                 sample_weight = None
         train_metrics = evaluation_utils.get_eval_metrics(truth, pred, use_classification_metrics, sample_weight)
 
-        if test_gen is not None:
+        if test_idx is not None:
             with tf.device('/cpu:0'):
+                test_batch_size = min(eval_batch_size, len(test_idx))
+                test_gen = modeling.get_dataset(seqs, test_idx, encoding, enrich_scores, classes, counts, batch_size=test_batch_size, shuffle=False, flatten=flatten)
                 pred = model.predict(test_gen)
                 if 'logistic' in model_type:
                     if savefile is not None:
