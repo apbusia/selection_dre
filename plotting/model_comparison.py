@@ -71,7 +71,7 @@ def make_culled_correlation_plot(results_df, out_dir, out_tag, corr_type, includ
     reg_df, class_df = None, None
     for _, row in results_df.iterrows():
         cur_df = {'fracs': row['fracs'],  # np.arange(0, 1, 0.01),
-                  'culled_{}'.format(corr_type): row['culled_{}'.format(corr_type)],
+                  'culled_{}'.format(corr_type): np.nan_to_num(row['culled_{}'.format(corr_type)]),
                   'model': [row['model']] * len(row['culled_{}'.format(corr_type)])}
         cur_df = pd.DataFrame(cur_df)
         if row['task'] == 'regression':
@@ -171,7 +171,7 @@ def make_culled_correlation_paired_plot(results_df, out_dir, out_tag, corr_type,
     reg_df, class_df = None, None
     for _, row in results_df.iterrows():
         cur_df = {'fracs': row['fracs'],  # np.arange(0, 1, 0.01),
-                  '{}_culled_{}'.format(row['task'], corr_type): row['culled_{}'.format(corr_type)],
+                  '{}_culled_{}'.format(row['task'], corr_type): np.nan_to_num(row['culled_{}'.format(corr_type)]),
                   'model': [row['model']] * len(row['culled_{}'.format(corr_type)])}
         cur_df = pd.DataFrame(cur_df)
         if row['task'] == 'regression':
