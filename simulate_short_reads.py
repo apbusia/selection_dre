@@ -1,5 +1,6 @@
 import os
 import argparse
+import tempfile
 import numpy as np
 import pandas as pd
 from simulate_from_fitness import simulate_true_proportions
@@ -24,6 +25,7 @@ def merge_pre_and_post_counts(pre_df, post_df, seq_column='seq', count_column='c
 
 def main(args):
     np.random.seed(SEED)
+    tempfile.tempdir = os.getcwd()
     
     print('Loading data from file: {}'.format(args.data_file))
     df = pd.read_csv(args.data_file)
@@ -48,6 +50,7 @@ def main(args):
     for r in range(args.n_replicates):
         for p in ['pre', 'post']:
             counts[p][r] = np.random.multinomial(args.total_reads, df['{}_p'.format(p)].values)
+    
     print('Sampling short reads ({} variants)...'.format(len(df)))
     print_freq = 1000
     replicates = {'pre': [None] * args.n_replicates,
@@ -64,13 +67,33 @@ def main(args):
                     })
                     reads['end'] = reads['start'] + args.read_length
                     reads = pd.DataFrame(reads.apply(lambda x: df['seq'][i][x['start']:x['end']], 1), columns=['seq'])
-                    reads = reads.value_counts()
                     if replicates[p][r] is None:
-                        replicates[p][r] = reads
+                        replicates[p][r] = tempfile.NamedTemporaryFile()
+                        reads.to_csv(replicates[p][r], index=False)
                     else:
-                        replicates[p][r] = replicates[p][r].add(reads, fill_value=0)
+                        reads.to_csv(replicates[p][r], mode='a', header=False, index=False)
+    
+    chunksize = int(1e6)
     for r in range(args.n_replicates):
-        df = merge_pre_and_post_counts(replicates['pre'][r], replicates['post'][r], count_column='0')
+        print('Computing short read counts for replicate {}...'.format(r))
+        counts = {'pre': None, 'post': None}
+        i = 0
+        for p in ['pre', 'post']:
+            replicates[p][r].seek(0)
+            chunks = pd.read_csv(replicates[p][r], chunksize=chunksize, usecols=['seq'])
+            for chunk in chunks:
+                chunk_counts = chunk.value_counts()
+                if counts[p] is None:
+                    counts[p] = chunk_counts
+                else:
+                    counts[p] = counts[p].add(chunk_counts, fill_value=0)
+                i += 1
+                print('\tReads processed for counts: %i' % (i * chunksize))
+        for p in ['pre', 'post']:
+            replicates[p][r].close()
+            counts[p] = counts[p].reset_index()
+            counts[p].columns = ['seq', 'count']
+        df = merge_pre_and_post_counts(counts['pre'], counts['post'], count_column='count')
         if args.save_file is not None:
             save_file, ext = os.path.splitext(args.save_file)
             save_file = save_file + '_r{}'.format(r) + ext
