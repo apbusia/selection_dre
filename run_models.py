@@ -63,7 +63,8 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
                  lr=None, n_hidden=None, hidden_size=None, alpha=None, weighted_loss=None,
                  window_size=None, residual_channels=None, skip_channels=None,
                  train_idx=None, test_idx=None, val_idx=None, epochs=None, batch_size=None,
-                 early_stopping=None, wandb=False, return_metrics=True, gradient_clip=None, savefile=None):
+                 early_stopping=None, wandb=False, return_metrics=True,
+                 gradient_clip=None, adam_epsilon=None, savefile=None):
     eval_batch_size = 1024
     if encoding == 'pairwise':
         encoding = data_prep.index_encode_is_plus_pairwise
@@ -98,12 +99,12 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
             val_idx = np.concatenate([val_idx, np.array(val_idx) + len(seqs)])
         if test_idx is not None:
             test_idx = np.concatenate([test_idx, np.array(test_idx) + len(seqs)])
-        counts = np.concatenate([pre_counts, post_counts])
+        counts = np.concatenate([post_counts, pre_counts])
 #         counts = counts + 1  # Use same pseudo-count scheme as for regression models for consistency.
         if normalize:
             # Reweight counts to avoid exploding gradients but preserve relative amounts in each pool.
             counts = counts / np.amax(counts)
-        classes = np.array([0] * len(seqs) + [1] * len(seqs), int)
+        classes = np.array([1] * len(seqs) + [0] * len(seqs), int)
         seqs = pd.concat([seqs, seqs.copy()], ignore_index=True)
         monitor = 'val_weighted_sparse_categorical_crossentropy'
     
@@ -124,17 +125,17 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
     
     input_shape = tuple(train_gen.element_spec[0].shape[1:])
     if model_type == 'linear':
-        model = modeling.make_linear_model(input_shape, lr=lr, l2_reg=alpha, gradient_clip=gradient_clip)
+        model = modeling.make_linear_model(input_shape, lr=lr, l2_reg=alpha, gradient_clip=gradient_clip, epsilon=adam_epsilon)
     elif model_type == 'ann':
-        model = modeling.make_ann_model(input_shape, num_hid=n_hidden, hid_size=hidden_size, lr=lr, l2_reg=alpha, gradient_clip=gradient_clip)
+        model = modeling.make_ann_model(input_shape, num_hid=n_hidden, hid_size=hidden_size, lr=lr, l2_reg=alpha, gradient_clip=gradient_clip, epsilon=adam_epsilon)
     elif model_type == 'cnn':
-        model = modeling.make_cnn_model(input_shape, num_hid=n_hidden, hid_size=hidden_size, win_size=window_size, residual_channels=residual_channels, skip_channels=skip_channels, lr=lr, l2_reg=alpha, gradient_clip=gradient_clip)
+        model = modeling.make_cnn_model(input_shape, num_hid=n_hidden, hid_size=hidden_size, win_size=window_size, residual_channels=residual_channels, skip_channels=skip_channels, lr=lr, l2_reg=alpha, gradient_clip=gradient_clip, epsilon=adam_epsilon)
     elif model_type == 'logistic_linear':
-        model = modeling.make_linear_classifier(input_shape, lr=lr, l2_reg=alpha, gradient_clip=gradient_clip)
+        model = modeling.make_linear_classifier(input_shape, lr=lr, l2_reg=alpha, gradient_clip=gradient_clip, epsilon=adam_epsilon)
     elif model_type == 'logistic_ann':
-        model = modeling.make_ann_classifier(input_shape, num_hid=n_hidden, hid_size=hidden_size, lr=lr, l2_reg=alpha, gradient_clip=gradient_clip)
+        model = modeling.make_ann_classifier(input_shape, num_hid=n_hidden, hid_size=hidden_size, lr=lr, l2_reg=alpha, gradient_clip=gradient_clip, epsilon=adam_epsilon)
     elif model_type == 'logistic_cnn':
-        model = modeling.make_cnn_classifier(input_shape, num_hid=n_hidden, hid_size=hidden_size, win_size=window_size, residual_channels=residual_channels, skip_channels=skip_channels, lr=lr, l2_reg=alpha, gradient_clip=gradient_clip)
+        model = modeling.make_cnn_classifier(input_shape, num_hid=n_hidden, hid_size=hidden_size, win_size=window_size, residual_channels=residual_channels, skip_channels=skip_channels, lr=lr, l2_reg=alpha, gradient_clip=gradient_clip, epsilon=adam_epsilon)
     
     print('\nStarting training...')
     history_callback = model.fit(train_gen, epochs=epochs, validation_data=val_gen, callbacks=callbacks)
@@ -206,7 +207,8 @@ def main(args):
             seqs, pre_counts, post_counts, args.encoding, args.model_type, normalize=args.normalize,
             lr=args.learning_rate, n_hidden=args.n_hidden, hidden_size=args.hidden_size, alpha=args.alpha,
             window_size=args.window_size, residual_channels=args.residual_channels, skip_channels=args.skip_channels,
-            train_idx=np.arange(n_samples), epochs=args.epochs, batch_size=args.batch_size, weighted_loss=args.weighted_loss, gradient_clip=args.gradient_clip, savefile=savefile)
+            train_idx=np.arange(n_samples), epochs=args.epochs, batch_size=args.batch_size, weighted_loss=args.weighted_loss,
+            gradient_clip=args.gradient_clip, adam_epsilon=args.adam_epsilon, savefile=savefile)
         print('\nTrain metrics:')
         evaluation_utils.print_eval_metrics(train_metrics)
         with open(savefile + '_train_metrics.pkl', 'wb') as f:
@@ -222,7 +224,8 @@ def main(args):
                 lr=args.learning_rate, n_hidden=args.n_hidden, hidden_size=args.hidden_size, alpha=args.alpha,
                 window_size=args.window_size, residual_channels=args.residual_channels, skip_channels=args.skip_channels,
                 train_idx=train_idx, test_idx=test_idx, val_idx=val_idx, epochs=args.epochs, batch_size=args.batch_size,
-                early_stopping=args.early_stopping, weighted_loss=args.weighted_loss, gradient_clip=args.gradient_clip,
+                early_stopping=args.early_stopping, weighted_loss=args.weighted_loss,
+                gradient_clip=args.gradient_clip, adam_epsilon=args.adam_epsilon,
                 savefile=savefile + '_fold{}'.format(i))
             for k in cur_train_metrics.keys():
                 train_metrics[k].append(cur_train_metrics[k])
@@ -259,6 +262,7 @@ if __name__ == '__main__':
     parser.add_argument("--normalize", help="normalize enrichment scores", action='store_true')
     parser.add_argument("--weighted_loss", help="use David's weighted loss function", action='store_true')
     parser.add_argument("--gradient_clip", help="max value for gradient clipping", type=float)
+    parser.add_argument("--adam_epsilon", help="numerical stability constant in ADAM optimizer", type=float)
     parser.add_argument("--description", help="optional description to add to output filenames", type=str)
     parser.add_argument("--n_folds", default=3, help="number of folds to use for CV; pass n_folds=1 to train on full data.", type=int)
     args = parser.parse_args()

@@ -75,14 +75,14 @@ def get_regularizer(l1_reg=0., l2_reg=0.):
     return reg
 
         
-def make_linear_model(input_shape, lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None):
+def make_linear_model(input_shape, lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None, epsilon=None):
     """
     Makes a linear keras model.
     """
     reg = get_regularizer(l1_reg, l2_reg)
 
     inp = tfkl.Input(shape=input_shape)
-    output = tfkl.Dense(1, activation='linear', kernel_regularizer=reg, bias_regularizer=reg)(inp)
+    output = tfkl.Dense(1, activation='linear', kernel_regularizer=reg, epsilon=epsilon, bias_regularizer=reg)(inp)
     model = tfk.models.Model(inputs=inp, outputs=output)
     model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, clipvalue=gradient_clip),
                   loss=tfk.losses.MeanSquaredError(),
@@ -91,7 +91,7 @@ def make_linear_model(input_shape, lr=0.001, l1_reg=0., l2_reg=0., gradient_clip
     return model
 
 
-def make_linear_classifier(input_shape, lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None):
+def make_linear_classifier(input_shape, lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None, epsilon=None):
     """
     Makes a logistic keras model.
     """
@@ -100,14 +100,14 @@ def make_linear_classifier(input_shape, lr=0.001, l1_reg=0., l2_reg=0., gradient
     inp = tfkl.Input(shape=input_shape)
     output = tfkl.Dense(2, activation='linear', kernel_regularizer=reg, bias_regularizer=reg)(inp)
     model = tfk.models.Model(inputs=inp, outputs=output)
-    model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, clipvalue=gradient_clip),
+    model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, epsilon=epsilon, clipvalue=gradient_clip),
                   loss=tfk.losses.SparseCategoricalCrossentropy(from_logits=True),
                   metrics=[tfk.metrics.SparseCategoricalCrossentropy(from_logits=True)],
                   weighted_metrics=[tfk.metrics.SparseCategoricalCrossentropy(from_logits=True)])
     return model
 
 
-def make_ann_model(input_shape, num_hid=2, hid_size=100, lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None):
+def make_ann_model(input_shape, num_hid=2, hid_size=100, lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None, epsilon=None):
     """
     Builds an artificial neural network model for regression.
     """
@@ -118,14 +118,14 @@ def make_ann_model(input_shape, num_hid=2, hid_size=100, lr=0.001, l1_reg=0., l2
         z = tfkl.Dense(hid_size, activation='relu', kernel_regularizer=reg, bias_regularizer=reg)(z)
     out = tfkl.Dense(1, activation='linear', kernel_regularizer=reg, bias_regularizer=reg)(z)
     model = tfk.models.Model(inputs=inp, outputs=out)
-    model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, clipvalue=gradient_clip),
+    model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, epsilon=epsilon, clipvalue=gradient_clip),
                   loss=tfk.losses.MeanSquaredError(),
                   metrics=[tfk.metrics.MeanSquaredError()],
                   weighted_metrics=[tfk.metrics.MeanSquaredError()])
     return model
 
 
-def make_ann_classifier(input_shape, num_hid=2, hid_size=100, lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None):
+def make_ann_classifier(input_shape, num_hid=2, hid_size=100, lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None, epsilon=None):
     """
     Builds an artificial neural network model for classification.
     """
@@ -136,14 +136,14 @@ def make_ann_classifier(input_shape, num_hid=2, hid_size=100, lr=0.001, l1_reg=0
         z = tfkl.Dense(hid_size, activation='relu', kernel_regularizer=reg, bias_regularizer=reg)(z)
     out = tfkl.Dense(2, activation='linear', kernel_regularizer=reg, bias_regularizer=reg)(z)
     model = tfk.models.Model(inputs=inp, outputs=out)
-    model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, clipvalue=gradient_clip),
+    model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, epsilon=epsilon, clipvalue=gradient_clip),
                   loss=tfk.losses.SparseCategoricalCrossentropy(from_logits=True),
                   metrics=[tfk.metrics.SparseCategoricalCrossentropy(from_logits=True)],
                   weighted_metrics=[tfk.metrics.SparseCategoricalCrossentropy(from_logits=True)])
     return model
 
 
-def make_cnn_model(input_shape, num_hid=2, hid_size=100, win_size=2, residual_channels=16, skip_channels=16, padding='same', lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None):
+def make_cnn_model(input_shape, num_hid=2, hid_size=100, win_size=2, residual_channels=16, skip_channels=16, padding='same', lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None, epsilon=None):
     """
     Builds a convolutional neural network model for regression.
     """
@@ -173,14 +173,14 @@ def make_cnn_model(input_shape, num_hid=2, hid_size=100, win_size=2, residual_ch
     z = tfkl.GlobalMaxPool1D()(z)
     out = tfkl.Dense(1, activation='linear', kernel_regularizer=reg, bias_regularizer=reg)(z)
     model = tfk.models.Model(inputs=inp, outputs=out)
-    model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, epsilon=1e-4, clipnorm=gradient_clip),
+    model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, epsilon=epsilon, clipnorm=gradient_clip),
                   loss=tfk.losses.MeanSquaredError(),
                   metrics=[tfk.metrics.MeanSquaredError()],
                   weighted_metrics=[tfk.metrics.MeanSquaredError()])
     return model
 
 
-def make_cnn_classifier(input_shape, num_hid=2, hid_size=100, win_size=2, residual_channels=16, skip_channels=16, padding='same', lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None):
+def make_cnn_classifier(input_shape, num_hid=2, hid_size=100, win_size=2, residual_channels=16, skip_channels=16, padding='same', lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None, epsilon=None):
     """
     Builds a convolutional neural network model for classification.
     """
@@ -210,7 +210,7 @@ def make_cnn_classifier(input_shape, num_hid=2, hid_size=100, win_size=2, residu
     z = tfkl.GlobalMaxPool1D()(z)
     out = tfkl.Dense(2, activation='linear', kernel_regularizer=reg, bias_regularizer=reg)(z)
     model = tfk.models.Model(inputs=inp, outputs=out)
-    model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, epsilon=1e-4, clipnorm=gradient_clip),
+    model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, epsilon=epsilon, clipnorm=gradient_clip),
                   loss=tfk.losses.SparseCategoricalCrossentropy(from_logits=True),
                   metrics=[tfk.metrics.SparseCategoricalCrossentropy(from_logits=True)],
                   weighted_metrics=[tfk.metrics.SparseCategoricalCrossentropy(from_logits=True)])
