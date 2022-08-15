@@ -64,7 +64,7 @@ def main(args):
     else:
         colors = sns.color_palette('flare', n_colors=len(seqs))
         legend_elements = None
-    fig, axes = plt.subplots(1, len(model_paths), figsize=(5 * len(model_paths), 4))
+    fig, axes = plt.subplots(1, len(model_paths), figsize=(2 * len(model_paths), 2))
     min_pred, max_pred = np.inf, -np.inf
     
     for i, model_path in enumerate(model_paths):
@@ -95,8 +95,9 @@ def main(args):
         ax.scatter(preds, titers, s=20, c=colors)
         ax.set_yscale('log')
         ax.set_ylabel(r'Viral Genome (vg/$\mu$L)', fontsize=14)
-        ax.set_xlabel('Predicted Log Enrichment', fontsize=14)
-        ax.set_title('{} {} Model vs. Titer'.format(get_model_name(model_path), get_task(model_path)), fontsize=14)
+        ax.set_xlabel('Predicted Log-enrichment', fontsize=14)
+        train_type = 'LER' if get_task(model_path) == 'regression' else 'DRC'
+        ax.set_title('{}-trained {} Model vs. Titer'.format(train_type, get_model_name(model_path)), fontsize=14)
         
         if args.annotate_points:
             min_t, max_t = np.amin(titers), np.amax(titers)
@@ -106,7 +107,7 @@ def main(args):
         
         pearson = get_pearsonr(titers, preds)
         spearman = get_spearmanr(titers, preds)
-        plt.figtext((0.5 + i) / (len(model_paths)), -0.1, 'Pearson = {:0.2f},\nSpearman={:0.2f}'.format(pearson, spearman), ha='center', fontsize=10, bbox={'facecolor': 'gray', 'alpha': 0.5, 'pad': 5})
+        plt.figtext((0.5 + i) / (len(model_paths)), -0.1, 'Pearson = {:0.2f},\nSpearman={:0.2f}'.format(pearson, spearman), ha='center', fontsize=10, bbox={'facecolor': 'lightgray', 'alpha': 0.5, 'pad': 5})
     
     ep = 0.1
     for ax in axes:

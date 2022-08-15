@@ -66,7 +66,7 @@ def get_color_palette(include_cnn=False):
 
 
 def make_culled_correlation_plot(results_df, out_dir, out_tag, corr_type, include_cnn=False):
-    fig, axes = plt.subplots(1, 2, figsize=(8, 3), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(4, 2), sharey=True)
     palette, order = get_color_palette(include_cnn)
     reg_df, class_df = None, None
     for _, row in results_df.iterrows():
@@ -88,8 +88,8 @@ def make_culled_correlation_plot(results_df, out_dir, out_tag, corr_type, includ
     class_df.reset_index(inplace=True)
     sns.lineplot(data=reg_df, x='fracs', y='culled_{}'.format(corr_type), hue='model', palette=palette, hue_order=order, err_style='band', ax=axes[0], legend=False)
     sns.lineplot(data=class_df, x='fracs', y='culled_{}'.format(corr_type), hue='model', palette=palette, hue_order=order, err_style='band', ax=axes[1])
-    axes[0].set_title('Regression Models')
-    axes[1].set_title('Classification Models')
+    axes[0].set_title('LER-trained Models')
+    axes[1].set_title('DRC-trained Models')
     for ax in axes:
         ax.set_xlabel('Fraction of top test sequences')
         ax.set_ylabel('{} correlation'.format(corr_type.capitalize()))
@@ -102,7 +102,7 @@ def make_culled_correlation_plot(results_df, out_dir, out_tag, corr_type, includ
 
 
 def make_correlation_barplots(results_df, out_dir, out_tag, include_cnn=False):
-    f, axes = plt.subplots(1, 3, figsize=(12, 3))
+    f, axes = plt.subplots(1, 3, figsize=(9, 3))
     palette, order = get_color_palette(include_cnn)
     sns.barplot(data=results_df, x='task', y='pearson_r', hue='model', palette=palette, hue_order=order, ax=axes[0])
     axes[0].legend_.remove()
@@ -120,7 +120,7 @@ def make_correlation_barplots(results_df, out_dir, out_tag, include_cnn=False):
 
 
 def make_correlation_paired_plots(results_df, out_dir, out_tag, include_cnn=False):
-    f, axes = plt.subplots(1, 3, figsize=(12, 3))
+    f, axes = plt.subplots(1, 3, figsize=(9, 3))
     palette, order = get_color_palette(include_cnn)
     metrics = ['pearson_r', 'spearman_r', 'mse']
     reg_df, class_df = None, None
@@ -156,8 +156,8 @@ def make_correlation_paired_plots(results_df, out_dir, out_tag, include_cnn=Fals
             tag = 'Pearson'
         if metric == 'spearman_r':
             tag = 'Spearman'
-        ax.set_xlabel('Regression {}'.format(tag))
-        ax.set_ylabel('Classification {}'.format(tag))
+        ax.set_xlabel('LER {}'.format(tag))
+        ax.set_ylabel('DRC {}'.format(tag))
         if i < len(axes) - 1:
             ax.legend_.remove()
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.).get_texts()[-1].set_text('Error Bars')
@@ -166,7 +166,7 @@ def make_correlation_paired_plots(results_df, out_dir, out_tag, include_cnn=Fals
 
 
 def make_culled_correlation_paired_plot(results_df, out_dir, out_tag, corr_type, include_cnn=False):
-    fig, ax = plt.subplots(1, 1, figsize=(4, 2))
+    fig, ax = plt.subplots(1, 1, figsize=(2, 2))
     palette, order = get_color_palette(include_cnn)
     reg_df, class_df = None, None
     for _, row in results_df.iterrows():
@@ -191,12 +191,21 @@ def make_culled_correlation_paired_plot(results_df, out_dir, out_tag, corr_type,
     plot_df = pd.merge(reg_df, class_df, how='outer')
     plot_df['fracs'] = 1 - plot_df['fracs']  # For consistency with x-axis of culled correlation line plots above.
     sns.scatterplot(data=plot_df, x='regression_culled_{}'.format(corr_type), y='classification_culled_{}'.format(corr_type), hue='model', size='fracs', sizes=(5, 100), palette=palette, hue_order=order, alpha=0.8, ax=ax, linewidth=0, edgecolor='none')
-    diag_x = np.linspace(min(plot_df['regression_culled_{}'.format(corr_type)].min(), plot_df['classification_culled_{}'.format(corr_type)].min()),
-                         min(plot_df['regression_culled_{}'.format(corr_type)].max(), plot_df['classification_culled_{}'.format(corr_type)].max()),
-                         10)
+    if corr_type in ['pearson', 'spearman']:
+        bottom_lim, top_lim = 0, 1
+    else:
+        bottom_lim = min(
+            plot_df['regression_culled_{}'.format(corr_type)].min(), plot_df['classification_culled_{}'.format(corr_type)].min())
+        top_lim = max(
+            plot_df['regression_culled_{}'.format(corr_type)].max(), plot_df['classification_culled_{}'.format(corr_type)].max())
+    ax_buffer = (top_lim - bottom_lim) * 0.075
+    bottom_lim, top_lim = bottom_lim - ax_buffer, top_lim + ax_buffer
+    ax.set_ylim(bottom_lim, top_lim)
+    ax.set_xlim(bottom_lim, top_lim)
+    diag_x = np.linspace(bottom_lim, top_lim, 10)
     ax.plot(diag_x, diag_x, color='k', linestyle='dashed', linewidth=1)
-    ax.set_xlabel('Regression {}'.format(corr_type.capitalize()))
-    ax.set_ylabel('Classification {}'.format(corr_type.capitalize()))
+    ax.set_xlabel('LER {}'.format(corr_type.capitalize()))
+    ax.set_ylabel('DRC {}'.format(corr_type.capitalize()))
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.savefig(os.path.join(out_dir, '{}_culled_{}_paired_plot.png'.format(out_tag, corr_type)), dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
     plt.close()

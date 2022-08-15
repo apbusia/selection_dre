@@ -14,7 +14,7 @@ def main(args):
     
     df = pd.read_csv(args.data_file)
     
-    fig, axes = plt.subplots(3, 1, figsize=(3, 4.5))
+    fig, axes = plt.subplots(3, 1, figsize=(2, 3))
     palette = sns.color_palette('crest', n_colors=1) + sns.color_palette('flare', n_colors=1)
     
 #     # Fitness distribution
@@ -61,7 +61,7 @@ def main(args):
 #     g.set_axis_labels('Pre Count', 'Post Count')
 
     df = df.rename(columns={args.enrichment_column: 'groundtruth'})
-    g = sns.JointGrid(data=df, x='groundtruth', y='observed', height=3) #, xlim=(0, m), ylim=(0, m), marginal_ticks=True)
+    g = sns.JointGrid(data=df, x='groundtruth', y='observed', height=2) #, xlim=(0, m), ylim=(0, m), marginal_ticks=True)
     # g.ax_joint.set(xscale='log', yscale='log')
 #     cax = g.figure.add_axes([.15, .55, .02, .2])
     g.plot_joint(sns.histplot, cmap=sns.light_palette(palette[0], as_cmap=True), pmax=0.8) #, cbar=True, cbar_ax=cax)
