@@ -202,6 +202,9 @@ def main(args):
     
     if args.n_folds == 1:
         print('\nRunning on full dataset...')
+        if not args.retain_unsequenced:
+            mask = (pre_counts > 0) | (post_counts > 0)
+            seqs, pre_counts, post_counts = seqs[mask], pre_counts[mask], post_counts[mask]
         n_samples = len(seqs)
         train_metrics, _ = run_training(
             seqs, pre_counts, post_counts, args.encoding, args.model_type, normalize=args.normalize,
@@ -218,7 +221,11 @@ def main(args):
         train_metrics, test_metrics = defaultdict(list), defaultdict(list)
         for i, (train_idx, test_idx) in enumerate(kf.split(seqs)):
             print('\nRunning on fold {}...'.format(i+1))
-            train_idx, val_idx = train_test_split(train_idx, test_size=0.2, shuffle=False, random_state=SEED)
+            if not args.retain_unsequenced:
+                train_idx = train_idx[(pre_counts[train_idx] > 0) | (post_counts[train_idx] > 0)]
+            val_idx = None
+            if args.early_stopping:
+                train_idx, val_idx = train_test_split(train_idx, test_size=0.2, shuffle=False, random_state=SEED)
             cur_train_metrics, cur_test_metrics = run_training(
                 seqs, pre_counts, post_counts, args.encoding, args.model_type, normalize=args.normalize,
                 lr=args.learning_rate, n_hidden=args.n_hidden, hidden_size=args.hidden_size, alpha=args.alpha,
@@ -265,5 +272,6 @@ if __name__ == '__main__':
     parser.add_argument("--adam_epsilon", help="numerical stability constant in ADAM optimizer", type=float)
     parser.add_argument("--description", help="optional description to add to output filenames", type=str)
     parser.add_argument("--n_folds", default=3, help="number of folds to use for CV; pass n_folds=1 to train on full data.", type=int)
+    parser.add_argument("--retain_unsequenced", help="retain seq with pre_count=post_count=0 in training data", action='store_true')
     args = parser.parse_args()
     main(args)
