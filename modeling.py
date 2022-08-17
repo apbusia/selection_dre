@@ -82,9 +82,9 @@ def make_linear_model(input_shape, lr=0.001, l1_reg=0., l2_reg=0., gradient_clip
     reg = get_regularizer(l1_reg, l2_reg)
 
     inp = tfkl.Input(shape=input_shape)
-    output = tfkl.Dense(1, activation='linear', kernel_regularizer=reg, epsilon=epsilon, bias_regularizer=reg)(inp)
+    output = tfkl.Dense(1, activation='linear', kernel_regularizer=reg, bias_regularizer=reg)(inp)
     model = tfk.models.Model(inputs=inp, outputs=output)
-    model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, clipvalue=gradient_clip),
+    model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, epsilon=epsilon, clipvalue=gradient_clip),
                   loss=tfk.losses.MeanSquaredError(),
                   metrics=[tfk.metrics.MeanSquaredError()],
                   weighted_metrics=[tfk.metrics.MeanSquaredError()])
