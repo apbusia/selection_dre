@@ -22,10 +22,13 @@ def main(args):
 #     sns.histplot(data=df, x=args.fitness_column, stat='density', kde=True, color=palette[0], ax=ax)
     
     # Enrichment distribution
-    pre_counts = df[args.pre_column] + 1
-    post_counts = df[args.post_column] + 1
-    df['observed'] = np.log((post_counts / np.sum(post_counts)) / (pre_counts / np.sum(pre_counts)))
-    xlim = (min(df['observed'].min(), df[args.enrichment_column].min()), max(df['observed'].max(), df[args.enrichment_column].max()))
+    df['observed'] = None
+    observed_mask = (df[args.pre_column] > 0) | (df[args.post_column] > 0)
+    observed_df = df[observed_mask].copy()
+    pre_counts = observed_df[args.pre_column] + 1
+    post_counts = observed_df[args.post_column] + 1
+    df.loc[observed_mask, 'observed'] = np.log((post_counts / np.sum(post_counts)) / (pre_counts / np.sum(pre_counts)))
+    xlim = (min(df[observed_mask]['observed'].min(), df[args.enrichment_column].min()), max(df[observed_mask]['observed'].max(), df[args.enrichment_column].max()))
     
     ax = axes[0]
     sns.histplot(data=df, x=args.enrichment_column, stat='density', color=palette[0], ax=ax)
@@ -40,10 +43,10 @@ def main(args):
     
     # Count distributions
     ax = axes[2]
-    df[args.pre_column] = df[args.pre_column] + 1 * (df[args.pre_column] == 0)  # Add pseudocount for log-scale
-    df[args.post_column] = df[args.post_column] + 1 * (df[args.post_column] == 0) # Add pseudocount for log-scale
-    df = df.rename(columns={args.pre_column: 'pre', args.post_column: 'post'})
-    sns.histplot(data=df[['pre', 'post']], stat='proportion', multiple='dodge', log_scale=True, common_norm=False, palette=palette, ax=ax)
+    observed_df[args.pre_column] = observed_df[args.pre_column] + 1 * (observed_df[args.pre_column] == 0)  # Add pseudocount for log-scale
+    observed_df[args.post_column] = observed_df[args.post_column] + 1 * (observed_df[args.post_column] == 0) # Add pseudocount for log-scale
+    observed_df = observed_df.rename(columns={args.pre_column: 'pre', args.post_column: 'post'})
+    sns.histplot(data=observed_df[['pre', 'post']], stat='proportion', multiple='dodge', log_scale=True, common_norm=False, palette=palette, ax=ax)
 #     sns.histplot(data=df[['pre', 'post']], stat='proportion', element='step', cumulative=True, fill=False, common_norm=False, palette=palette, ax=ax)
 #     ax.set_ylim(0, 1)
     ax.set_xlabel('Sequencing Count')
@@ -65,7 +68,7 @@ def main(args):
     # g.ax_joint.set(xscale='log', yscale='log')
 #     cax = g.figure.add_axes([.15, .55, .02, .2])
     g.plot_joint(sns.histplot, cmap=sns.light_palette(palette[0], as_cmap=True), pmax=0.8) #, cbar=True, cbar_ax=cax)
-    g.plot_marginals(sns.histplot, element='step', stat='density', color=palette[0])
+    g.plot_marginals(sns.histplot, element='bars', stat='density', color=palette[0])
     g.set_axis_labels('Groundtruth Log-enrichment', 'Observed Log-enrichment')
     
     plt.savefig(os.path.join(out_dir, '{}_joint_data_visualization.png'.format(out_tag)), dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
