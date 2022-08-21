@@ -145,6 +145,8 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
         model.save(model_savefile)
         loss_savefile = savefile + '_loss_history.npy'
         np.save(loss_savefile, loss_history)
+        if test_idx is not None:
+            np.save(savefile + '_test_idx.npy', test_idx)
     
     train_metrics, test_metrics = None, None
     if return_metrics:
@@ -184,7 +186,6 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
             if savefile is not None:
                 test_pred_savefile = savefile + '_test_pred.npy'
                 np.save(test_pred_savefile, pred)
-                np.save(savefile + '_test_idx.npy', test_idx)
     
     del model
     return train_metrics, test_metrics
@@ -194,6 +195,7 @@ def main(args):
     np.random.seed(SEED)
     
     savefile = get_savefile(args)
+    return_metrics = False if args.no_eval else True
     
     data_df = pd.read_csv(args.data_file)
     seqs = data_df['seq']
@@ -211,11 +213,12 @@ def main(args):
             lr=args.learning_rate, n_hidden=args.n_hidden, hidden_size=args.hidden_size, alpha=args.alpha,
             window_size=args.window_size, residual_channels=args.residual_channels, skip_channels=args.skip_channels,
             train_idx=np.arange(n_samples), epochs=args.epochs, batch_size=args.batch_size, weighted_loss=args.weighted_loss,
-            gradient_clip=args.gradient_clip, adam_epsilon=args.adam_epsilon, savefile=savefile)
-        print('\nTrain metrics:')
-        evaluation_utils.print_eval_metrics(train_metrics)
-        with open(savefile + '_train_metrics.pkl', 'wb') as f:
-            pickle.dump(train_metrics, f)
+            gradient_clip=args.gradient_clip, adam_epsilon=args.adam_epsilon, savefile=savefile, return_metrics=return_metrics)
+        if return_metrics:
+            print('\nTrain metrics:')
+            evaluation_utils.print_eval_metrics(train_metrics)
+            with open(savefile + '_train_metrics.pkl', 'wb') as f:
+                pickle.dump(train_metrics, f)
     else:
         kf = KFold(n_splits=args.n_folds, shuffle=True, random_state=SEED)
         train_metrics, test_metrics = defaultdict(list), defaultdict(list)
@@ -233,20 +236,22 @@ def main(args):
                 train_idx=train_idx, test_idx=test_idx, val_idx=val_idx, epochs=args.epochs, batch_size=args.batch_size,
                 early_stopping=args.early_stopping, weighted_loss=args.weighted_loss,
                 gradient_clip=args.gradient_clip, adam_epsilon=args.adam_epsilon,
-                savefile=savefile + '_fold{}'.format(i))
-            for k in cur_train_metrics.keys():
-                train_metrics[k].append(cur_train_metrics[k])
-                test_metrics[k].append(cur_test_metrics[k])
+                savefile=savefile + '_fold{}'.format(i), return_metrics=return_metrics)
+            if return_metrics:
+                for k in cur_train_metrics.keys():
+                    train_metrics[k].append(cur_train_metrics[k])
+                    test_metrics[k].append(cur_test_metrics[k])
 
-        print('\nCV train metrics:')
-        evaluation_utils.print_eval_metrics(train_metrics)
-        with open(savefile + '_cv_train_metrics.pkl', 'wb') as f:
-            pickle.dump(train_metrics, f)
+        if return_metrics:
+            print('\nCV train metrics:')
+            evaluation_utils.print_eval_metrics(train_metrics)
+            with open(savefile + '_cv_train_metrics.pkl', 'wb') as f:
+                pickle.dump(train_metrics, f)
 
-        print('\nCV test metrics:')
-        evaluation_utils.print_eval_metrics(test_metrics)
-        with open(savefile + '_cv_test_metrics.pkl', 'wb') as f:
-            pickle.dump(test_metrics, f)
+            print('\nCV test metrics:')
+            evaluation_utils.print_eval_metrics(test_metrics)
+            with open(savefile + '_cv_test_metrics.pkl', 'wb') as f:
+                pickle.dump(test_metrics, f)
 
 
 if __name__ == '__main__':
@@ -273,5 +278,6 @@ if __name__ == '__main__':
     parser.add_argument("--description", help="optional description to add to output filenames", type=str)
     parser.add_argument("--n_folds", default=3, help="number of folds to use for CV; pass n_folds=1 to train on full data.", type=int)
     parser.add_argument("--retain_unsequenced", help="retain seq with pre_count=post_count=0 in training data", action='store_true')
+    parser.add_argument("--no_eval", help="turn off evaluation loop after model training", action='store_true')
     args = parser.parse_args()
     main(args)
