@@ -134,7 +134,7 @@ def main(args):
         evaluation_utils.print_eval_metrics(metrics)
         for k in metrics.keys():
             results['metrics'][k].append(metrics[k])
-        fracs = np.arange(0, 1, 0.01)
+        fracs = np.linspace(0, 1, args.num_fracs, endpoint=False)
         results['meta']['culled_fracs'] = fracs
         results['metrics']['culled_pearson'].append(
             evaluation_utils.calculate_culled_correlation(preds, truth, fracs))
@@ -164,10 +164,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('data_path', help='path to counts dataset', type=str)
     parser.add_argument('model_paths', help='path to trained Keras predictive model', nargs='+', type=str)
-#     parser.add_argument('--pre_column', default='count_pre', help='column name in counts dataset', type=str)
-#     parser.add_argument('--post_column', default='count_post', help='column name in counts dataset', type=str)
     parser.add_argument('--enrichment_column', help='column name in counts dataset', type=str)
     parser.add_argument('--idx_paths', help='path to file containing subset of test indices', nargs='+', type=str)
+    parser.add_argument('--num_fracs', default=75, help='number of K for computing top K performance metrics', type=int)
     parser.add_argument('--save_path', help='path to which to save output', type=str)
     args = parser.parse_args()
     main(args)

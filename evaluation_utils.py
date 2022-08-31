@@ -175,6 +175,7 @@ def calculate_culled_correlation(ypred, ytest, fracs, correlation_type='pearson'
     corrs = []
     n_test = len(ypred)
     y_test = ytest[:n_test]
+#     sorted_test_idx = np.argsort(ypred)
     sorted_test_idx = np.argsort(y_test)
     for i in range(len(fracs)):
         num_frac = int(n_test * fracs[i])
