@@ -89,29 +89,29 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
         # If weighted_loss is True, then loss is Gaussian with variance according to log-ratio of two Binomials.
         # See Katz, 1978 for details on this variance.
         enrich_scores[:, 1] = 1. if not weighted_loss else 1. / (2 * enrich_scores[:, 1])
-        classes = None
         counts = None
         monitor = 'val_mean_squared_error'
     elif model_type in ['logistic_linear', 'logistic_ann', 'logistic_cnn']:
         enrich_scores = None
-        train_idx = np.random.permutation(np.concatenate([train_idx, np.array(train_idx) + len(seqs)]))
-        if val_idx is not None:
-            val_idx = np.concatenate([val_idx, np.array(val_idx) + len(seqs)])
-        if test_idx is not None:
-            test_idx = np.concatenate([test_idx, np.array(test_idx) + len(seqs)])
-        counts = np.concatenate([post_counts, pre_counts])
+#         train_idx = np.random.permutation(np.concatenate([train_idx, np.array(train_idx) + len(seqs)]))
+#         if val_idx is not None:
+#             val_idx = np.concatenate([val_idx, np.array(val_idx) + len(seqs)])
+#         if test_idx is not None:
+#             test_idx = np.concatenate([test_idx, np.array(test_idx) + len(seqs)])
+#         counts = np.concatenate([post_counts, pre_counts])
+        counts = np.column_stack((pre_counts, post_counts))
 #         counts = counts + 1  # Use same pseudo-count scheme as for regression models for consistency.
         if normalize:
             # Reweight counts to avoid exploding gradients but preserve relative amounts in each pool.
             counts = counts / np.amax(counts)
-        classes = np.array([1] * len(seqs) + [0] * len(seqs), int)
-        seqs = pd.concat([seqs, seqs.copy()], ignore_index=True)
+#         classes = np.array([1] * len(seqs) + [0] * len(seqs), int)
+#         seqs = pd.concat([seqs, seqs.copy()], ignore_index=True)
         monitor = 'val_weighted_sparse_categorical_crossentropy'
     
     disable_gpu(0)
     keras.backend.clear_session()
     
-    train_gen = modeling.get_dataset(seqs, train_idx, encoding, enrich_scores, classes, counts, batch_size=batch_size, seed=SEED, flatten=flatten)
+    train_gen = modeling.get_dataset(seqs, train_idx, encoding, enrich_scores, counts, batch_size=batch_size, seed=SEED, flatten=flatten)
     callbacks, val_gen, test_gen = None, None, None
     if wandb:
         callbacks = [WandbCallback()]
@@ -121,7 +121,7 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
         es_callback = keras.callbacks.EarlyStopping(monitor=monitor, min_delta=0, patience=10, restore_best_weights=True)
         callbacks = [es_callback] if callbacks is None else callbacks + [es_callback]
         val_batch_size = min(eval_batch_size, len(val_idx))
-        val_gen = modeling.get_dataset(seqs, val_idx, encoding, enrich_scores, classes, counts, batch_size=val_batch_size, shuffle=False, flatten=flatten)
+        val_gen = modeling.get_dataset(seqs, val_idx, encoding, enrich_scores, counts, batch_size=val_batch_size, shuffle=False, flatten=flatten)
     
     input_shape = tuple(train_gen.element_spec[0].shape[1:])
     if model_type == 'linear':
@@ -152,16 +152,24 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
     if return_metrics:
         print('\nStarting evaluation...')
         with tf.device('/cpu:0'):
-            train_gen = modeling.get_dataset(seqs, train_idx, encoding, enrich_scores, classes, counts, batch_size=eval_batch_size, shuffle=False, flatten=flatten)
+            train_gen = modeling.get_dataset(seqs, train_idx, encoding, enrich_scores, counts, batch_size=eval_batch_size, shuffle=False, flatten=flatten, tile=False)
             pred = model.predict(train_gen)
             use_classification_metrics = False
             if 'logistic' in model_type:
                 pred = np.argmax(pred, axis=1)
-                truth = classes[train_idx]
+                truth = np.concatenate([np.zeros_like(pred), np.ones_like(pred)])
+                sample_weight = np.concatenate([pre_counts[train_idx], post_counts[train_idx]])
+                pred = np.tile(pred, 2)
+#                 truth, sample_weight = [], []
+#                 for x, t, w in train_gen:
+#                     truth.append(t)
+#                     sample_weight.append(w)
+#                 truth = np.concatenate(truth, axis=0)
+#                 sample_weight = np.concatenate(sample_weight, axis=0)
+#                 truth = np.tile(np.concatenate([np.ones(eval_batch_size), np.zeros(eval_batch_size)]), pred.size / eval_batch_size)
                 use_classification_metrics = True
-                if np.amax(counts) == 1:
-                    counts = counts * max(np.amax(post_counts), np.amax(pre_counts))
-                sample_weight = counts[train_idx]
+#                 if np.amax(counts) == 1:
+#                     sample_weight = sample_weight * max(np.amax(post_counts), np.amax(pre_counts))
             else:
                 pred = pred.flatten()
                 truth = enrich_scores[train_idx][:,0]
@@ -171,14 +179,23 @@ def run_training(seqs, pre_counts, post_counts, encoding, model_type, normalize=
         if test_idx is not None:
             with tf.device('/cpu:0'):
                 test_batch_size = min(eval_batch_size, len(test_idx))
-                test_gen = modeling.get_dataset(seqs, test_idx, encoding, enrich_scores, classes, counts, batch_size=test_batch_size, shuffle=False, flatten=flatten)
+                test_gen = modeling.get_dataset(seqs, test_idx, encoding, enrich_scores, counts, batch_size=test_batch_size, shuffle=False, flatten=flatten, tile=False)
                 pred = model.predict(test_gen)
                 if 'logistic' in model_type:
                     if savefile is not None:
                         np.save(savefile + '_test_logits.npy', pred)
                     pred = np.argmax(pred, axis=1)
-                    truth = classes[test_idx]
-                    sample_weight = counts[test_idx]
+                    truth = np.concatenate([np.zeros_like(pred), np.ones_like(pred)])
+                    sample_weight = np.concatenate([pre_counts[test_idx], post_counts[test_idx]])
+                    pred = np.tile(pred, 2)
+#                     truth, sample_weight = [], []
+#                     for x, t, w in test_gen:
+#                         truth.append(t)
+#                         sample_weight.append(w)
+#                     truth = np.concatenate(truth, axis=0)
+#                     sample_weight = np.concatenate(sample_weight, axis=0)
+#                     if np.amax(counts) == 1:
+#                         sample_weight = sample_weight * max(np.amax(post_counts), np.amax(pre_counts))
                 else:
                     pred = pred.flatten()
                     truth = enrich_scores[test_idx][:,0]

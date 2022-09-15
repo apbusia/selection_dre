@@ -1,11 +1,14 @@
 import os
+import argparse
 import numpy as np
-from itertools import combinations
-import pre_process
 import pandas as pd
+from itertools import combinations
+from sklearn.model_selection import KFold
+import pre_process
 
 
 DATA_DIR = "../data/counts/"
+SEED = 7
 
 
 def calculate_enrichment_scores(n_pre, n_post, N_pre, N_post):
@@ -44,13 +47,14 @@ def one_hot_encode(seq):
     return out.flatten()
 
 
-def index_encode_neighbors(seq, shift=True):
+def index_encode_neighbors(seq, shift=False):
     """
     Returns an integer vector where each entry represents
     an index encoding of a particular pair of amino
     acid at a pair of neighboring positions.
     """
-    neighbors = [(i, i+1) for i in range(6)]
+    l = len(seq)
+    neighbors = [(i, i+1) for i in range(l - 1)]
     m = len(pre_process.AA_ORDER)
     idx = np.reshape(np.arange(m ** 2, dtype=int), (m, m))
     out = np.zeros(len(neighbors), dtype=int)
@@ -70,7 +74,8 @@ def encode_neighbors(seq):
     the presence or absence of a particular pair of amino
     acid at a pair of neighboring positions
     """
-    neighbors = [(i, i+1) for i in range(6)]
+    l = len(seq)
+    neighbors = [(i, i+1) for i in range(l - 1)]
     m = len(pre_process.AA_ORDER)
     out = np.zeros((len(neighbors), m, m))
     for i, (c1, c2) in enumerate(neighbors):
@@ -80,13 +85,14 @@ def encode_neighbors(seq):
     return out.flatten()
 
 
-def index_encode_pairwise(seq, shift=True):
+def index_encode_pairwise(seq, shift=False):
     """
     Returns an integer vector where each entry represents
     an index encoding of a particular pair of amino
     acid at a pair of positions.
     """
-    combos = list(combinations(range(7), 2))
+    l = len(seq)
+    combos = list(combinations(range(l), 2))
     m = len(pre_process.AA_ORDER)
     idx = np.reshape(np.arange(m ** 2, dtype=int), (m, m))
     out = np.zeros(len(combos), dtype=int)
@@ -106,7 +112,8 @@ def encode_pairwise(seq):
     the presence or absence of a particular pair of amino
     acid at a pair of positions
     """
-    combos = list(combinations(range(7), 2))
+    l = len(seq)
+    combos = list(combinations(range(l), 2))
     m = len(pre_process.AA_ORDER)
     out = np.zeros((len(combos), m, m))
     for i, (c1, c2) in enumerate(combos):
@@ -233,3 +240,73 @@ def get_nnk_p(n_aa=7):
     p_nnk[2] *= 0.5
     p_nnk = np.tile(p_nnk.T, n_aa).T
     return p_nnk
+
+
+def main(args):
+    np.random.seed(SEED)
+    
+    savefile = args.save_name
+    print('Preparing data in {}'.format(args.counts_file))
+    data_df = pd.read_csv(args.counts_file)[['seq', args.pre_column, args.post_column]]
+    
+    # Compute and store sequence encodings.
+    encodings = [('is', index_encode), ('neighbors', index_encode_is_plus_neighbors), ('pairwise', index_encode_is_plus_pairwise)]
+    seqs = data_df['seq']
+    for enc_name, enc_fn in encodings:
+        print('Computing "{}" encoding...'.format(enc_name))
+        feat = np.stack(seqs.apply(enc_fn))
+        feat = pd.DataFrame(feat, columns=['{}_{}'.format(enc_name, i) for i in range(feat.shape[1])])
+        data_df = pd.concat([data_df, feat], axis=1)
+        del feat
+    
+    # Split data into specified number of folds.
+    if args.n_folds == 1:
+        folds = [(np.random.permutation(len(data_df)), None)] if args.shuffle else [(np.arange(len(data_df)), None)]
+    else:
+        folds = KFold(n_splits=args.n_folds, shuffle=args.shuffle, random_state=SEED).split(data_df)
+    for i, (train_idx, test_idx) in enumerate(folds):
+        print('Preparing fold {}...'.format(i+1))
+        if savefile is not None and test_idx is not None:
+            np.save('models/' + os.path.splitext(os.path.split(savefile)[1])[0] + '_fold{}_test_idx.npy'.format(i), test_idx)
+        fold_df = data_df.iloc[train_idx]
+
+        # Optionally removed unobserved sequences.
+        if not args.retain_unsequenced:
+            fold_df = fold_df[(fold_df[args.pre_column] > 0) | (fold_df[args.post_column] > 0)]
+        
+        # Compute and store enrichment scores.
+        pre_counts = fold_df[args.pre_column] + 1
+        post_counts = fold_df[args.post_column] + 1
+        enrich_scores = calculate_enrichment_scores(pre_counts, post_counts, pre_counts.sum(), post_counts.sum())
+        mean_en, var_en = enrich_scores[:, 0], enrich_scores[:, 1]
+        if args.normalize:
+            mu_en = np.mean(mean_en)
+            sig_en = np.std(mean_en)
+            mean_en = (mean_en - mu_en) / sig_en
+            var_en = (np.sqrt(var_en) / sig_en)**2
+        fold_df['enrichment'] = mean_en
+        fold_df['enrichment_var'] = var_en
+
+        # Optionally re-weight observed counts.
+        if args.normalize:
+            count_scale = max(np.amax(fold_df[args.pre_column]), np.amax(fold_df[args.post_column]))
+            fold_df[args.pre_column] = fold_df[args.pre_column] / count_scale
+            fold_df[args.post_column] = fold_df[args.post_column] / count_scale
+    
+        if savefile is not None:
+            savename, ext = os.path.splitext(savefile)
+            fold_df.to_csv(savename + '_fold{}'.format(i) + ext, index=False, compression='gzip')
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('counts_file', help='path to counts dataset', type=str)
+    parser.add_argument('--pre_column', default='count_pre', help='column name in counts dataset', type=str)
+    parser.add_argument('--post_column', default='count_post', help='column name in counts dataset', type=str)
+    parser.add_argument('--normalize', help="normalize counts", action='store_true')
+    parser.add_argument('--n_folds', default=3, help='number of folds to split into; pass n_folds=1 to keep full data.', type=int)
+    parser.add_argument('--retain_unsequenced', help='retain seq with pre_count=post_count=0 in training data', action='store_true')
+    parser.add_argument('--shuffle', help='whether to shuffle combined dataset(s) before saving', action='store_true')
+    parser.add_argument('--save_name', help='filename to which to save prepared data', type=str)
+    args = parser.parse_args()
+    main(args)

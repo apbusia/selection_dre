@@ -39,23 +39,21 @@ def get_encoding_type(model_path):
     raise ValueError('model\'s encoding type not identified from path: {}'.format(model_path))
 
 
-def get_model_predictions(model, model_type, seqs, encoding, batch_size=256):
+def get_model_predictions(model, model_type, seqs, encoding, batch_size=512):
     n_samples = len(seqs)
     if model_type in ['linear', 'ann', 'cnn']:
         enrich_scores = np.zeros((n_samples, 2))
-        classes = None
         counts = None
     elif model_type in ['logistic_linear', 'logistic_ann', 'logistic_cnn']:
         enrich_scores = None
-        classes = np.zeros(n_samples)
-        counts = np.ones(n_samples)
+        counts = np.ones((n_samples, 2))
     flatten = False if 'cnn' in model_type else True
     xgen = modeling.get_dataset(
-        seqs, np.arange(n_samples), encoding, enrich_scores, classes, counts, batch_size=batch_size, shuffle=False, flatten=flatten)
+        seqs, np.arange(n_samples), encoding, enrich_scores, counts, batch_size=batch_size, shuffle=False, flatten=flatten, tile=False)
 #     with tf.device('/cpu:0'):
 #         predictions = model.predict(xgen)
     predictions = model.predict(xgen)
-    return predictions
+    return predictions[:n_samples]
 
 
 def logits_to_log_density_ratio(preds):
@@ -112,7 +110,6 @@ def main(args):
             truth = enrich_scores
             seqs = df['seq']
         
-        print('\n\tComputing metrics')
         model = keras.models.load_model(model_path)
         encoding_type = get_encoding_type(model_path)
         if encoding_type == 'pairwise':
@@ -134,6 +131,7 @@ def main(args):
         evaluation_utils.print_eval_metrics(metrics)
         for k in metrics.keys():
             results['metrics'][k].append(metrics[k])
+        print('\n\tComputing top-K metrics...')
         fracs = np.linspace(0, 1, args.num_fracs, endpoint=False)
         results['meta']['culled_fracs'] = fracs
         results['metrics']['culled_pearson'].append(
@@ -166,7 +164,7 @@ if __name__ == "__main__":
     parser.add_argument('model_paths', help='path to trained Keras predictive model', nargs='+', type=str)
     parser.add_argument('--enrichment_column', help='column name in counts dataset', type=str)
     parser.add_argument('--idx_paths', help='path to file containing subset of test indices', nargs='+', type=str)
-    parser.add_argument('--num_fracs', default=75, help='number of K for computing top K performance metrics', type=int)
+    parser.add_argument('--num_fracs', default=100, help='number of K for computing top K performance metrics', type=int)
     parser.add_argument('--save_path', help='path to which to save output', type=str)
     args = parser.parse_args()
     main(args)
