@@ -20,6 +20,7 @@ def get_eval_metrics(truth, predictions, use_classification_metrics=False, sampl
         'var_explained': metrics.explained_variance_score(truth, predictions, sample_weight=sample_weight),
         'pearson_r': get_pearsonr(truth, predictions),
         'spearman_r': get_spearmanr(truth, predictions),
+        'ndcg': metrics.ndcg_score(np.expand_dims(truth - np.amin(truth), axis=0), np.expand_dims(predictions, axis=0)),
     }
 
 
@@ -31,6 +32,7 @@ def print_eval_metrics(metric_dict):
             ('var_explained', 'Variance Explained Score'),
             ('pearson_r', 'Pearson correlation coefficient'),
             ('spearman_r', 'Spearman correlation coefficient'),
+            ('ndcg', 'Normalized Dicounted Cumulative Gain'),
         ]
     else:
         key_to_text = [
