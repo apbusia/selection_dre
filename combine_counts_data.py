@@ -9,8 +9,6 @@ SEED = 7
 
 
 def main(args):
-#     df["A"].
-    
     savefile = args.save_file
     
     long_df = pd.read_csv(args.long_data_file)
