@@ -15,14 +15,16 @@ def get_dataset(sequences, ids, encoding_fn, enrich_scores=None, counts=None, ba
         return get_enrichment_dataset(sequences, enrich_scores, ids, encoding_fn, batch_size, shuffle, shuffle_buffer, seed, flatten)
     elif counts is not None:
         return get_classification_dataset(sequences, counts, ids, encoding_fn, batch_size, shuffle, shuffle_buffer, seed, flatten, tile)
-    
+
 
 def get_enrichment_dataset(sequences, enrich_scores, ids, encoding_fn, batch_size=1024, shuffle=True, shuffle_buffer=int(1e4), seed=None, flatten=True):
     """Returns a tf.data.Dataset that generates input/log-enrichment score data."""
-    seq_len = len(sequences[0])
+    seq_len = len(sequences.iloc[0])
     X = np.stack(sequences.iloc[ids].apply(encoding_fn))
-    enrich_scores = enrich_scores[ids]
-    ds = tf.data.Dataset.from_tensor_slices((X, enrich_scores[:,0], enrich_scores[:,1]))
+    enrich_means = np.column_stack([es[ids][:,0] for es in enrich_scores])
+    enrich_vars = np.column_stack([es[ids][:,1] for es in enrich_scores])
+    output_keys = ['output_{}'.format(i) for i in range(len(enrich_scores))]
+    ds = tf.data.Dataset.from_tensor_slices((X, enrich_means, enrich_vars))
     if shuffle:
         ds = ds.shuffle(shuffle_buffer, seed=seed)
     ds = ds.batch(batch_size)
@@ -44,18 +46,18 @@ def get_enrichment_dataset(sequences, enrich_scores, ids, encoding_fn, batch_siz
             x = tf.one_hot(x, onehot_depth)
             if flatten:
                 x = tf.reshape(x, flat_shape)
-        return x, e, v
+        return x, dict(zip(output_keys, tf.unstack(e, axis=1))), dict(zip(output_keys, tf.unstack(v, axis=1)))
     ds = ds.map(tf_encoding_fn, num_parallel_calls=tf.data.AUTOTUNE)
     return ds
 
 
 def get_classification_dataset(sequences, counts, ids, encoding_fn, batch_size=1024, shuffle=True, shuffle_buffer=int(1e4), seed=None, flatten=True, tile=True):
     """Returns a tf.data.Dataset that generates input/label/count data."""
-    seq_len = len(sequences[0])
+    seq_len = len(sequences.iloc[0])
     X = np.stack(sequences.iloc[ids].apply(encoding_fn))
     counts = counts[ids]
-    pre_counts, post_counts = counts[:, 0], counts[:, 1]
-    ds = tf.data.Dataset.from_tensor_slices((X, pre_counts, post_counts))
+#     pre_counts, post_counts = counts[:, 0], counts[:, 1]
+    ds = tf.data.Dataset.from_tensor_slices((X, counts))
     if shuffle:
         ds = ds.shuffle(shuffle_buffer, seed=seed)
     ds = ds.batch(batch_size)
@@ -67,8 +69,9 @@ def get_classification_dataset(sequences, counts, ids, encoding_fn, batch_size=1
         pair_onehot_depth = onehot_depth ** 2
         split_sizes = [seq_len, X.shape[1] - seq_len]
         pair_flat_shape = [-1, split_sizes[1] * pair_onehot_depth]
-    tile_dims = [2, 1] if flatten else [2, 1, 1]
-    def tf_encoding_fn(x, pre, post):
+    n_classes = counts.shape[1]
+    tile_dims = [n_classes, 1] if flatten else [n_classes, 1, 1]
+    def tf_encoding_fn(x, c):
         if split_sizes is not None:
             x_is, x_pairs = tf.split(x, split_sizes, 1)
             x_is = tf.one_hot(x_is, onehot_depth)
@@ -78,10 +81,10 @@ def get_classification_dataset(sequences, counts, ids, encoding_fn, batch_size=1
             x = tf.one_hot(x, onehot_depth)
             if flatten:
                 x = tf.reshape(x, flat_shape)
+        classes = tf.repeat(tf.range(n_classes), repeats=tf.shape(x)[0])
         if tile:
             x = tf.tile(x, tile_dims)
-        counts = tf.concat([post, pre], 0)
-        classes = tf.concat([tf.ones_like(post), tf.zeros_like(pre)], 0)
+        counts = tf.reshape(tf.transpose(c), [-1])
         return x, classes, counts
     ds = ds.map(tf_encoding_fn, num_parallel_calls=tf.data.AUTOTUNE)
     return ds
@@ -143,34 +146,6 @@ def get_classification_dataset_from_csv(csv_name, count_cols, encoding, batch_si
 
     ds = ds.map(tf_encoding_fn, num_parallel_calls=tf.data.AUTOTUNE)
     return ds
-# 
-
-# def get_classification_dataset_from_csv(csv_name, count_cols, encoding, batch_size=1024, shuffle=True, shuffle_buffer=int(1e4), seed=None, flatten=True):
-#     cols = pd.read_csv(csv_name, nrows=1).columns.tolist()
-#     select_cols = count_cols + [c for c in cols if '{}_'.format(encoding) in c]
-#     ds = tf.data.experimental.CsvDataset(csv_name, [int()]*len(select_cols), header=True, select_cols=[cols.index(c) for c in select_cols])
-#     if shuffle:
-#         ds = ds.shuffle(shuffle_buffer, seed=seed)
-#     ds = ds.batch(batch_size)
-#     ds = ds.prefetch(tf.data.AUTOTUNE)
-#     onehot_depth = len(AA_ORDER)
-#     if encoding in ['pairwise', 'neighbors']:
-#         onehot_depth = onehot_depth + onehot_depth ** 2
-#     flat_shape_fn = lambda s: [-1, s.shape[1] * onehot_depth]
-#     classes = tf.concat([tf.ones([batch_size]), tf.zeros(batch_size)], 0)
-#     def tf_encoding_fn(*inputs):
-#         enc_seq = tf.stack(inputs[2:], axis=1)
-#         if flatten:
-#             enc_seq = tf.reshape(tf.one_hot(enc_seq, onehot_depth), flat_shape_fn(enc_seq))
-#             enc_seq = tf.tile(enc_seq, [2, 1])
-#         else:
-#             enc_seq = tf.one_hot(enc_seq, onehot_depth)
-#             enc_seq = tf.tile(enc_seq, [2, 1, 1])
-#         counts = tf.concat(inputs[:2], 0)
-#         return (enc_seq, classes, counts)
-
-#     ds = ds.map(tf_encoding_fn, num_parallel_calls=tf.data.AUTOTUNE)
-#     return ds
     
     
 def get_regularizer(l1_reg=0., l2_reg=0.):
@@ -189,30 +164,32 @@ def get_regularizer(l1_reg=0., l2_reg=0.):
     return reg
 
         
-def make_linear_model(input_shape, lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None, epsilon=None, amsgrad=True):
+def make_linear_model(input_shape, n_outputs=1, lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None, epsilon=None, amsgrad=True):
     """
     Makes a linear keras model.
     """
     reg = get_regularizer(l1_reg, l2_reg)
 
     inp = tfkl.Input(shape=input_shape)
-    output = tfkl.Dense(1, activation='linear', kernel_regularizer=reg, bias_regularizer=reg)(inp)
+    output = []
+    for i in range(n_outputs):
+        output.append(tfkl.Dense(1, activation='linear', kernel_regularizer=reg, bias_regularizer=reg, name='output_{}'.format(i))(inp))
     model = tfk.models.Model(inputs=inp, outputs=output)
     model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, epsilon=epsilon, clipvalue=gradient_clip, amsgrad=amsgrad),
-                  loss=tfk.losses.MeanSquaredError(),
-                  metrics=[tfk.metrics.MeanSquaredError()],
-                  weighted_metrics=[tfk.metrics.MeanSquaredError()])
+                  loss={'output_{}'.format(i): tfk.losses.MeanSquaredError() for i in range(n_outputs)},
+                  metrics={'output_{}'.format(i): tfk.metrics.MeanSquaredError() for i in range(n_outputs)},
+                  weighted_metrics={'output_{}'.format(i): tfk.metrics.MeanSquaredError() for i in range(n_outputs)})
     return model
 
 
-def make_linear_classifier(input_shape, lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None, epsilon=None, amsgrad=True):
+def make_linear_classifier(input_shape, n_outputs=2, lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None, epsilon=None, amsgrad=True):
     """
     Makes a logistic keras model.
     """
     reg = get_regularizer(l1_reg, l2_reg)
 
     inp = tfkl.Input(shape=input_shape)
-    output = tfkl.Dense(2, activation='linear', kernel_regularizer=reg, bias_regularizer=reg)(inp)
+    output = tfkl.Dense(n_outputs, activation='linear', kernel_regularizer=reg, bias_regularizer=reg)(inp)
     model = tfk.models.Model(inputs=inp, outputs=output)
     model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, epsilon=epsilon, clipvalue=gradient_clip, amsgrad=amsgrad),
                   loss=tfk.losses.SparseCategoricalCrossentropy(from_logits=True),
@@ -221,7 +198,7 @@ def make_linear_classifier(input_shape, lr=0.001, l1_reg=0., l2_reg=0., gradient
     return model
 
 
-def make_ann_model(input_shape, num_hid=2, hid_size=100, lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None, epsilon=None, amsgrad=True):
+def make_ann_model(input_shape, n_outputs=1, num_hid=2, hid_size=100, lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None, epsilon=None, amsgrad=True):
     """
     Builds an artificial neural network model for regression.
     """
@@ -230,16 +207,18 @@ def make_ann_model(input_shape, num_hid=2, hid_size=100, lr=0.001, l1_reg=0., l2
     z = inp
     for i in range(num_hid):
         z = tfkl.Dense(hid_size, activation='relu', kernel_regularizer=reg, bias_regularizer=reg)(z)
-    out = tfkl.Dense(1, activation='linear', kernel_regularizer=reg, bias_regularizer=reg)(z)
-    model = tfk.models.Model(inputs=inp, outputs=out)
+    output = []
+    for i in range(n_outputs):
+        output.append(tfkl.Dense(1, activation='linear', kernel_regularizer=reg, bias_regularizer=reg, name='output_{}'.format(i))(z))
+    model = tfk.models.Model(inputs=inp, outputs=output)
     model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, epsilon=epsilon, clipvalue=gradient_clip, amsgrad=amsgrad),
-                  loss=tfk.losses.MeanSquaredError(),
-                  metrics=[tfk.metrics.MeanSquaredError()],
-                  weighted_metrics=[tfk.metrics.MeanSquaredError()])
+                  loss={'output_{}'.format(i): tfk.losses.MeanSquaredError() for i in range(n_outputs)},
+                  metrics={'output_{}'.format(i): tfk.metrics.MeanSquaredError() for i in range(n_outputs)},
+                  weighted_metrics={'output_{}'.format(i): tfk.metrics.MeanSquaredError() for i in range(n_outputs)})
     return model
 
 
-def make_ann_classifier(input_shape, num_hid=2, hid_size=100, lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None, epsilon=None, amsgrad=True):
+def make_ann_classifier(input_shape, n_outputs=2, num_hid=2, hid_size=100, lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None, epsilon=None, amsgrad=True):
     """
     Builds an artificial neural network model for classification.
     """
@@ -248,7 +227,7 @@ def make_ann_classifier(input_shape, num_hid=2, hid_size=100, lr=0.001, l1_reg=0
     z = inp
     for i in range(num_hid):
         z = tfkl.Dense(hid_size, activation='relu', kernel_regularizer=reg, bias_regularizer=reg)(z)
-    out = tfkl.Dense(2, activation='linear', kernel_regularizer=reg, bias_regularizer=reg)(z)
+    out = tfkl.Dense(n_outputs, activation='linear', kernel_regularizer=reg, bias_regularizer=reg)(z)
     model = tfk.models.Model(inputs=inp, outputs=out)
     model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, epsilon=epsilon, clipvalue=gradient_clip, amsgrad=amsgrad),
                   loss=tfk.losses.SparseCategoricalCrossentropy(from_logits=True),
@@ -257,7 +236,7 @@ def make_ann_classifier(input_shape, num_hid=2, hid_size=100, lr=0.001, l1_reg=0
     return model
 
 
-def make_cnn_model(input_shape, num_hid=2, hid_size=100, win_size=2, residual_channels=16, skip_channels=16, padding='same', lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None, epsilon=None, amsgrad=True):
+def make_cnn_model(input_shape, n_outputs=1, num_hid=2, hid_size=100, win_size=2, residual_channels=16, skip_channels=16, padding='same', lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None, epsilon=None, amsgrad=True):
     """
     Builds a convolutional neural network model for regression.
     """
@@ -285,16 +264,18 @@ def make_cnn_model(input_shape, num_hid=2, hid_size=100, win_size=2, residual_ch
 #     z = tfkl.Flatten()(z)
 #     z = tfkl.Conv1D(hid_size, 100, padding='valid', kernel_regularizer=reg, use_bias=False)(z)
     z = tfkl.GlobalMaxPool1D()(z)
-    out = tfkl.Dense(1, activation='linear', kernel_regularizer=reg, bias_regularizer=reg)(z)
+    out = []
+    for i in range(n_outputs):
+        out.append(tfkl.Dense(1, activation='linear', kernel_regularizer=reg, bias_regularizer=reg, name='output_{}'.format(i))(z))
     model = tfk.models.Model(inputs=inp, outputs=out)
-    model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, epsilon=epsilon, clipnorm=gradient_clip, amsgrad=amsgrad),
-                  loss=tfk.losses.MeanSquaredError(),
-                  metrics=[tfk.metrics.MeanSquaredError()],
-                  weighted_metrics=[tfk.metrics.MeanSquaredError()])
+    model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, epsilon=epsilon, clipvalue=gradient_clip, amsgrad=amsgrad),
+                  loss={'output_{}'.format(i): tfk.losses.MeanSquaredError() for i in range(n_outputs)},
+                  metrics={'output_{}'.format(i): tfk.metrics.MeanSquaredError() for i in range(n_outputs)},
+                  weighted_metrics={'output_{}'.format(i): tfk.metrics.MeanSquaredError() for i in range(n_outputs)})
     return model
 
 
-def make_cnn_classifier(input_shape, num_hid=2, hid_size=100, win_size=2, residual_channels=16, skip_channels=16, padding='same', lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None, epsilon=None, amsgrad=True):
+def make_cnn_classifier(input_shape, n_outputs=2, num_hid=2, hid_size=100, win_size=2, residual_channels=16, skip_channels=16, padding='same', lr=0.001, l1_reg=0., l2_reg=0., gradient_clip=None, epsilon=None, amsgrad=True):
     """
     Builds a convolutional neural network model for classification.
     """
@@ -322,7 +303,7 @@ def make_cnn_classifier(input_shape, num_hid=2, hid_size=100, win_size=2, residu
 #     z = tfkl.Flatten()(z)
 #     z = tfkl.Conv1D(hid_size, 100, padding='valid', kernel_regularizer=reg, use_bias=False)(z)
     z = tfkl.GlobalMaxPool1D()(z)
-    out = tfkl.Dense(2, activation='linear', kernel_regularizer=reg, bias_regularizer=reg)(z)
+    out = tfkl.Dense(n_outputs, activation='linear', kernel_regularizer=reg, bias_regularizer=reg)(z)
     model = tfk.models.Model(inputs=inp, outputs=out)
     model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, epsilon=epsilon, clipnorm=gradient_clip, amsgrad=amsgrad),
                   loss=tfk.losses.SparseCategoricalCrossentropy(from_logits=True),

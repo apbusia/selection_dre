@@ -39,10 +39,10 @@ def get_encoding_type(model_path):
     raise ValueError('model\'s encoding type not identified from path: {}'.format(model_path))
 
 
-def get_model_predictions(model, model_type, seqs, encoding, batch_size=512):
+def get_model_predictions(model, model_type, seqs, encoding, batch_size=128):
     n_samples = len(seqs)
     if model_type in ['linear', 'ann', 'cnn']:
-        enrich_scores = np.zeros((n_samples, 2))
+        enrich_scores = [np.zeros((n_samples, 2))]
         counts = None
     elif model_type in ['logistic_linear', 'logistic_ann', 'logistic_cnn']:
         enrich_scores = None
@@ -50,15 +50,13 @@ def get_model_predictions(model, model_type, seqs, encoding, batch_size=512):
     flatten = False if 'cnn' in model_type else True
     xgen = modeling.get_dataset(
         seqs, np.arange(n_samples), encoding, enrich_scores, counts, batch_size=batch_size, shuffle=False, flatten=flatten, tile=False)
-#     with tf.device('/cpu:0'):
-#         predictions = model.predict(xgen)
     predictions = model.predict(xgen)
     return predictions[:n_samples]
 
 
-def logits_to_log_density_ratio(preds):
+def logits_to_log_density_ratio(preds, pre_idx=0, post_idx=1):
     preds = log_softmax(preds, axis=1) # Converts logits to log probabilities
-    log_dr = preds[:, 1] - preds[:, 0] # Pre <-> 0, Post <-> 1
+    log_dr = preds[:, post_idx] - preds[:, pre_idx]
     return log_dr
 
 
@@ -123,9 +121,10 @@ def main(args):
         preds = get_model_predictions(model, model_type, seqs, encoding)
         del model
         if 'logistic' in model_type:
-            preds = logits_to_log_density_ratio(preds)
+            # Add 1 to output_idx since pre is always index 0. in classification models.
+            preds = logits_to_log_density_ratio(preds, post_idx=args.output_idx+1)
         else:
-            preds = preds.flatten()
+            preds = preds[args.output_idx].flatten()
         metrics = evaluation_utils.get_eval_metrics(truth, preds)
         print('\n\tCurrent metrics:')
         evaluation_utils.print_eval_metrics(metrics)
@@ -163,6 +162,7 @@ if __name__ == "__main__":
     parser.add_argument('data_path', help='path to counts dataset', type=str)
     parser.add_argument('model_paths', help='path to trained Keras predictive model', nargs='+', type=str)
     parser.add_argument('--enrichment_column', help='column name in counts dataset', type=str)
+    parser.add_argument('--output_idx', default=0, help='index of model output to evaluate for multi-output models', type=int)
     parser.add_argument('--idx_paths', help='path to file containing subset of test indices', nargs='+', type=str)
     parser.add_argument('--num_fracs', default=100, help='number of K for computing top K performance metrics', type=int)
     parser.add_argument('--save_path', help='path to which to save output', type=str)
