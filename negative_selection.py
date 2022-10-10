@@ -67,15 +67,43 @@ def get_color_palette(include_cnn=False):
 
 
 def make_negative_selection_plot(results_df, truth_cols, save_file):
+    palette, order = get_color_palette(True)    
+    
+    # Scatterplot of groundtruth fitnesses
     fig, ax = plt.subplots(1, 1, figsize=(2, 2))
-    palette, order = get_color_palette(True)
-    sns.scatterplot(data=results_df, x=truth_cols[0], y=truth_cols[1], hue='model', style='method', palette=palette, hue_order=order, alpha=0.8, s=10, ax=ax, linewidth=0, edgecolor='none')
-    ax.set_xlabel('Groundtruth Fitness 1')
-    ax.set_ylabel('Groundtruth Fitness 2')
+    sns.scatterplot(data=results_df, x=truth_cols[0], y=truth_cols[1], hue='model', style='method', palette=palette, hue_order=order, alpha=0.5, s=10, ax=ax, linewidth=0, edgecolor='none')
+    ax.set_aspect('equal', adjustable='datalim')
+#     ax.set_xlabel('Groundtruth Fitness 1')
+#     ax.set_ylabel('Groundtruth Fitness 2')
+    ax.set_xlabel(r'$F_T$')
+    ax.set_ylabel(r"$F_T'$")
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.savefig(save_file, dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
     plt.close()
     return
+
+
+def make_objective_paired_plot(results_df, truth_cols, save_file):
+    palette, order = get_color_palette(True) 
+    
+    # Paired plot of negative selection objective
+    fig, ax = plt.subplots(1, 1, figsize=(2, 2))
+    results_df['truth'] = results_df[truth_cols[0]] - results_df[truth_cols[1]]
+    sns.scatterplot(data=results_df, x='pred', y='truth', hue='model', style='method', palette=palette, hue_order=order, alpha=0.5, s=10, ax=ax, linewidth=0, edgecolor='none', legend=False)
+#     ax.set_aspect('equal', adjustable='datalim')
+#     ymin, ymax = ax.get_ylim()
+#     xmin, xmax = ax.get_xlim()
+#     diag_x = np.linspace(min(ymin, xmin), max(ymax, xmax), 10)
+#     ax.plot(diag_x, diag_x, color='k', linestyle='dashed', linewidth=1)
+#     ax.set_xlabel('Groundtruth Fitness 1 - Fitness 2')
+#     ax.set_ylabel('Predicted Fitness 1 - Fitness 2')
+    ax.set_xlabel(r'Groundtruth $\Delta$')
+    ax.set_ylabel(r'Predicted $\Delta$')
+#     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plt.savefig(save_file, dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
+    plt.close()
+    return
+    
 
 
 def main(args):
@@ -86,6 +114,7 @@ def main(args):
     truth = args.truth_columns if args.truth_columns is not None else [
         'true_enrichment_{}'.format(i) for i in [args.pos_output_idx, args.neg_output_idx]]
     print('Using groundtruth in:', truth)
+    df = df[['seq'] + truth]
     idx_paths = args.idx_paths
     
     results, plot_df = None, None
@@ -153,25 +182,31 @@ def main(args):
         set_rc_params()
         plot_savefile = os.path.splitext(save_path)[0] + '_plot.png'
         make_negative_selection_plot(plot_df, truth, plot_savefile)
+        plot_savefile = os.path.splitext(save_path)[0] + '_plot_paired.png'
+        make_objective_paired_plot(plot_df, truth, plot_savefile)
     
     if args.run_mcnemar:
-        pos_threshold = np.quantile(results[truth[0]].values, 0.75)
-        neg_threshold = np.quantile(results[truth[1]].values, 0.25)
+        q = 0.99
         print('\nRunning McNemar\'s test on model predictions...')
-        method_preds = []
+        correct = {'DRC': [], 'LER': []}
+        for i in results['fold'].unique():
+            cur_results = results.loc[results['fold'] == i]
+            method = cur_results['method'].iloc[0]
+            t = cur_results[truth[args.pos_output_idx]].values - cur_results[truth[args.neg_output_idx]].values
+            t = t > np.quantile(t, q)
+            p = cur_results['pred'].values
+            p = p > np.quantile(p, q)
+            correct[method].append(1 * t == 1 * p)
         for method in ['DRC', 'LER']:
-#             cur_results = results.loc[(results['fold'] == i) & (results['method'] == method)]
-            cur_results = results.loc[results['method'] == method]
-            correct = (
-                1 * np.logical_and(cur_results[truth[0]].values > pos_threshold, cur_results[truth[1]].values < neg_threshold) == 
-                1 * np.logical_and(cur_results['pos_pred'].values > pos_threshold, cur_results['neg_pred'].values < neg_threshold))
-            print('\t{} Accuracy = {:.3f}'.format(method, np.mean(correct)))
-            method_preds.append(correct)
-        _, contingency_table = stats.contingency.crosstab(method_preds[0], method_preds[1])
+            print('\t{} Accuracy = {:.5f}'.format(method, np.mean(np.concatenate(correct[method]))))
+        _, contingency_table = stats.contingency.crosstab(np.concatenate(correct['DRC']), np.concatenate(correct['LER']))
         mcnemar = (abs(contingency_table[1, 0] - contingency_table[0, 1]) - 1)**2 / (
             contingency_table[1, 0] + contingency_table[0, 1])
         p_value = 1 - stats.chi2.cdf(mcnemar, 1)
         print('\tMcNemar\'s test statistic = {:.3f}, p-value = {:.3f}'.format(mcnemar, p_value))
+        if save_path is not None:
+            mcnemar_savefile = os.path.splitext(save_path)[0] + '_mcnemar.npz'
+            np.savez(mcnemar_savefile, contingency_table=contingency_table, test_statistic=mcnemar, p_value=p_value)
     return
 
 
