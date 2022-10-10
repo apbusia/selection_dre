@@ -3,6 +3,7 @@ import pandas as pd
 import tensorflow as tf
 import tensorflow.keras.backend as K
 from scipy.stats import pearsonr, spearmanr
+from joblib import Parallel, delayed
 import data_prep
 from pre_process import AA_ORDER
 
@@ -15,12 +16,14 @@ def get_dataset(sequences, ids, encoding_fn, enrich_scores=None, counts=None, ba
         return get_enrichment_dataset(sequences, enrich_scores, ids, encoding_fn, batch_size, shuffle, shuffle_buffer, seed, flatten)
     elif counts is not None:
         return get_classification_dataset(sequences, counts, ids, encoding_fn, batch_size, shuffle, shuffle_buffer, seed, flatten, tile)
+    else:
+        return get_sequence_dataset(sequences, ids, encoding_fn, batch_size, shuffle, shuffle_buffer, seed, flatten)
 
 
 def get_enrichment_dataset(sequences, enrich_scores, ids, encoding_fn, batch_size=1024, shuffle=True, shuffle_buffer=int(1e4), seed=None, flatten=True):
     """Returns a tf.data.Dataset that generates input/log-enrichment score data."""
     seq_len = len(sequences.iloc[0])
-    X = np.stack(sequences.iloc[ids].apply(encoding_fn))
+    X = np.array(Parallel(n_jobs=-1, verbose=1)(delayed(encoding_fn)(seq) for seq in sequences.iloc[ids]))
     enrich_means = np.column_stack([es[ids][:,0] for es in enrich_scores])
     enrich_vars = np.column_stack([es[ids][:,1] for es in enrich_scores])
     output_keys = ['output_{}'.format(i) for i in range(len(enrich_scores))]
@@ -54,9 +57,8 @@ def get_enrichment_dataset(sequences, enrich_scores, ids, encoding_fn, batch_siz
 def get_classification_dataset(sequences, counts, ids, encoding_fn, batch_size=1024, shuffle=True, shuffle_buffer=int(1e4), seed=None, flatten=True, tile=True):
     """Returns a tf.data.Dataset that generates input/label/count data."""
     seq_len = len(sequences.iloc[0])
-    X = np.stack(sequences.iloc[ids].apply(encoding_fn))
+    X = np.array(Parallel(n_jobs=-1, verbose=1)(delayed(encoding_fn)(seq) for seq in sequences.iloc[ids]))
     counts = counts[ids]
-#     pre_counts, post_counts = counts[:, 0], counts[:, 1]
     ds = tf.data.Dataset.from_tensor_slices((X, counts))
     if shuffle:
         ds = ds.shuffle(shuffle_buffer, seed=seed)
@@ -86,6 +88,37 @@ def get_classification_dataset(sequences, counts, ids, encoding_fn, batch_size=1
             x = tf.tile(x, tile_dims)
         counts = tf.reshape(tf.transpose(c), [-1])
         return x, classes, counts
+    ds = ds.map(tf_encoding_fn, num_parallel_calls=tf.data.AUTOTUNE)
+    return ds
+
+
+def get_sequence_dataset(sequences, ids, encoding_fn, batch_size=1024, shuffle=True, shuffle_buffer=int(1e4), seed=None, flatten=True):
+    """Returns a tf.data.Dataset that generates input sequences only."""
+    seq_len = len(sequences.iloc[0])
+    X = np.array(Parallel(n_jobs=-1, verbose=1)(delayed(encoding_fn)(seq) for seq in sequences.iloc[ids]))
+    ds = tf.data.Dataset.from_tensor_slices((X,))
+    if shuffle:
+        ds = ds.shuffle(shuffle_buffer, seed=seed)
+    ds = ds.batch(batch_size)
+    ds = ds.prefetch(tf.data.AUTOTUNE)
+    onehot_depth = len(AA_ORDER)
+    flat_shape = [-1, seq_len * onehot_depth]
+    split_sizes = None
+    if X.shape[1] > seq_len:
+        pair_onehot_depth = onehot_depth ** 2
+        split_sizes = [seq_len, X.shape[1] - seq_len]
+        pair_flat_shape = [-1, split_sizes[1] * pair_onehot_depth]
+    def tf_encoding_fn(x):
+        if split_sizes is not None:
+            x_is, x_pairs = tf.split(x, split_sizes, 1)
+            x_is = tf.one_hot(x_is, onehot_depth)
+            x_pairs = tf.one_hot(x_pairs, pair_onehot_depth)
+            x = tf.concat([tf.reshape(x_is, flat_shape), tf.reshape(x_pairs, pair_flat_shape)], 1)
+        else:
+            x = tf.one_hot(x, onehot_depth)
+            if flatten:
+                x = tf.reshape(x, flat_shape)
+        return x
     ds = ds.map(tf_encoding_fn, num_parallel_calls=tf.data.AUTOTUNE)
     return ds
 

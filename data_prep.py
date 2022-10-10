@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from itertools import combinations
 from sklearn.model_selection import KFold
+from joblib import Parallel, delayed
 import pre_process
 
 
@@ -251,10 +252,9 @@ def main(args):
     
     # Compute and store sequence encodings.
     encodings = [('is', index_encode), ('neighbors', index_encode_is_plus_neighbors), ('pairwise', index_encode_is_plus_pairwise)]
-    seqs = data_df['seq']
     for enc_name, enc_fn in encodings:
         print('Computing "{}" encoding...'.format(enc_name))
-        feat = np.stack(seqs.apply(enc_fn))
+        feat = np.array(Parallel(n_jobs=-1, verbose=1)(delayed(enc_fn)(seq) for seq in data_df['seq']))
         feat = pd.DataFrame(feat, columns=['{}_{}'.format(enc_name, i) for i in range(feat.shape[1])])
         data_df = pd.concat([data_df, feat], axis=1)
         del feat
@@ -263,7 +263,8 @@ def main(args):
     if args.n_folds == 1:
         folds = [(np.random.permutation(len(data_df)), None)] if args.shuffle else [(np.arange(len(data_df)), None)]
     else:
-        folds = KFold(n_splits=args.n_folds, shuffle=args.shuffle, random_state=SEED).split(data_df)
+        seed = SEED if args.shuffle else None
+        folds = KFold(n_splits=args.n_folds, shuffle=args.shuffle, random_state=seed).split(data_df)
     for i, (train_idx, test_idx) in enumerate(folds):
         print('Preparing fold {}...'.format(i+1))
         if savefile is not None and test_idx is not None:
