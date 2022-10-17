@@ -294,8 +294,6 @@ def make_cnn_model(input_shape, n_outputs=1, num_hid=2, hid_size=100, win_size=2
     z = tfkl.Add()(outputs) if len(outputs) > 1 else outputs[0]
     z = tfkl.ReLU()(z)
     # To accomodate variable-length sequences, use global pooling instead of flatten.
-#     z = tfkl.Flatten()(z)
-#     z = tfkl.Conv1D(hid_size, 100, padding='valid', kernel_regularizer=reg, use_bias=False)(z)
     z = tfkl.GlobalMaxPool1D()(z)
     out = []
     for i in range(n_outputs):
@@ -333,12 +331,10 @@ def make_cnn_classifier(input_shape, n_outputs=2, num_hid=2, hid_size=100, win_s
     z = tfkl.Add()(outputs) if len(outputs) > 1 else outputs[0]
     z = tfkl.ReLU()(z)
     # To accomodate variable-length sequences, use global pooling instead of flatten.
-#     z = tfkl.Flatten()(z)
-#     z = tfkl.Conv1D(hid_size, 100, padding='valid', kernel_regularizer=reg, use_bias=False)(z)
     z = tfkl.GlobalMaxPool1D()(z)
     out = tfkl.Dense(n_outputs, activation='linear', kernel_regularizer=reg, bias_regularizer=reg)(z)
     model = tfk.models.Model(inputs=inp, outputs=out)
-    model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, epsilon=epsilon, clipnorm=gradient_clip, amsgrad=amsgrad),
+    model.compile(optimizer=tfk.optimizers.Adam(learning_rate=lr, epsilon=epsilon, clipvalue=gradient_clip, amsgrad=amsgrad),
                   loss=tfk.losses.SparseCategoricalCrossentropy(from_logits=True),
                   metrics=[tfk.metrics.SparseCategoricalCrossentropy(from_logits=True)],
                   weighted_metrics=[tfk.metrics.SparseCategoricalCrossentropy(from_logits=True)])
