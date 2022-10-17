@@ -6,13 +6,13 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from scipy import stats
 from tensorflow import keras
 from matplotlib.lines import Line2D
 import data_prep
 from run_models import disable_gpu
 from evaluate_models import get_model_type, get_encoding_type, get_model_predictions, logits_to_log_density_ratio
 from model_comparison import set_rc_params, get_model_name, get_task
-from evaluation_utils import get_pearsonr, get_spearmanr
 
 
 def sci_notation(n, sig_fig=2):
@@ -52,6 +52,7 @@ def main(args):
     print('\nLoading data from {}'.format(data_path))
     df = pd.read_csv(data_path)
     seqs, titers = df['seq'], df['titer'].values
+    log_titers = np.log10(titers)
     
     if 'source' in df.columns:
         unique_sources = pd.unique(df['source'])
@@ -64,11 +65,11 @@ def main(args):
     else:
         colors = sns.color_palette('flare', n_colors=len(seqs))
         legend_elements = None
-    fig, axes = plt.subplots(1, len(model_paths), figsize=(2 * len(model_paths), 2))
+    fig, axes = plt.subplots(1, len(model_paths), figsize=(2 * len(model_paths), 2), sharey=True)
     min_pred, max_pred = np.inf, -np.inf
     
     for i, model_path in enumerate(model_paths):
-        disable_gpu(1)
+        disable_gpu([0, 1])
         keras.backend.clear_session()
         
         print('\nUsing model {}'.format(model_path))
@@ -92,28 +93,29 @@ def main(args):
         max_pred = max(np.amax(preds), max_pred)
         
         ax = axes[i]
-        ax.scatter(preds, titers, s=20, c=colors)
-        ax.set_yscale('log')
-        ax.set_ylabel(r'Viral Genome (vg/$\mu$L)', fontsize=14)
-        ax.set_xlabel('Predicted Log-enrichment', fontsize=14)
+        ax.scatter(preds, log_titers, s=20, c=colors)
+        sns.regplot(x=preds, y=log_titers, scatter=False, ci=None, color='gray', line_kws={'lw': 1, 'ls':'--'}, ax=ax)
+        if i == 0:
+            ax.set_ylabel(r'Titer (Viral Genome/$\mu$L)', fontsize=10)
         train_type = 'LER' if get_task(model_path) == 'regression' else 'DRC'
-        ax.set_title('{}-trained {} Model vs. Titer'.format(train_type, get_model_name(model_path)), fontsize=14)
+        ax.set_xlabel('{}-trained {} Prediction'.format(train_type, get_model_name(model_path)), fontsize=9)
         
         if args.annotate_points:
             min_t, max_t = np.amin(titers), np.amax(titers)
-            for p, t in zip(preds, titers):
+            for p, t, lt in zip(preds, titers, log_titers):
                 label, xytext, ha = get_text_label(p, t, min_t, max_t)
-                ax.annotate(label.format(p, sci_notation(t)), (p, t), textcoords='offset pixels', xytext=xytext, fontsize=10, ha=ha)
+                ax.annotate(label.format(p, sci_notation(t)), (p, lt), textcoords='offset pixels', xytext=xytext, fontsize=6, ha=ha)
         
-        pearson = get_pearsonr(titers, preds)
-        spearman = get_spearmanr(titers, preds)
-        plt.figtext((0.5 + i) / (len(model_paths)), -0.1, 'Pearson = {:0.2f},\nSpearman={:0.2f}'.format(pearson, spearman), ha='center', fontsize=10, bbox={'facecolor': 'lightgray', 'alpha': 0.5, 'pad': 5})
-    
-    ep = 0.1
+        pearson, pearson_p = stats.pearsonr(log_titers, preds)
+        spearman, spearman_p = stats.spearmanr(log_titers, preds)
+#         plt.figtext((0.5 + i) / (len(model_paths)), -0.1, 'Pearson = {:0.2f},\nSpearman={:0.2f}'.format(pearson, spearman), ha='center', fontsize=10, bbox={'facecolor': 'lightgray', 'alpha': 0.5, 'pad': 5})
+        ax.annotate('Pearson = {:0.2f}, p={:0.2f}\nSpearman={:0.2f}, p={:0.2f}'.format(pearson, pearson_p, spearman, spearman_p), (-1, 5), fontsize=8, bbox={'facecolor': 'lightgray', 'alpha': 0.2, 'pad': 2})
+                    
+    ep = 0.25
     for ax in axes:
         ax.set_xlim(min_pred - ep, max_pred + ep)
     if legend_elements is not None:
-        fig.legend(handles=legend_elements, loc='center right', fontsize=12)
+        fig.legend(handles=legend_elements, loc='center right', fontsize=10)
     plt.savefig(os.path.join(out_dir, '{}_titer_comparison_plot.png'.format(out_tag)), dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
     plt.close()
 

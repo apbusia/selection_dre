@@ -66,7 +66,7 @@ def get_color_palette(include_cnn=False):
 
 
 def make_culled_correlation_plot(results_df, out_dir, out_tag, corr_type, include_cnn=False):
-    fig, axes = plt.subplots(1, 2, figsize=(4, 2), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(4, 2))
     palette, order = get_color_palette(include_cnn)
     reg_df, class_df = None, None
     for _, row in results_df.iterrows():
@@ -87,16 +87,18 @@ def make_culled_correlation_plot(results_df, out_dir, out_tag, corr_type, includ
     reg_df.reset_index(inplace=True)
     class_df.reset_index(inplace=True)
     sns.lineplot(data=reg_df, x='fracs', y='culled_{}'.format(corr_type), hue='model', palette=palette, hue_order=order, err_style='band', ax=axes[0], legend=False)
-    sns.lineplot(data=class_df, x='fracs', y='culled_{}'.format(corr_type), hue='model', palette=palette, hue_order=order, err_style='band', ax=axes[1])
-    axes[0].set_title('LER-trained Models')
-    axes[1].set_title('DRC-trained Models')
-    for ax in axes:
+    sns.lineplot(data=class_df, x='fracs', y='culled_{}'.format(corr_type), hue='model', palette=palette, hue_order=order, err_style='band', ax=axes[1], legend=False)
+    bottom_lim = min(0, axes[0].get_ylim()[0], axes[1].get_ylim()[0])
+    top_lim = max(axes[0].get_ylim()[1], axes[1].get_ylim()[1])
+    for ax, task in zip(axes, ['LER', 'DRC']):
         ax.set_xlabel('Fraction of top test sequences')
-        ax.set_ylabel('{} correlation'.format(corr_type.capitalize()))
-        fracs2 = [f for i, f in enumerate(np.arange(0, 1, 0.01)) if i % 10 == 0]
+        ax.set_ylabel('{} {}'.format(task, corr_type.capitalize()))
+        fracs2 = [f for i, f in enumerate(np.arange(0, 1, 0.01)) if i % 20 == 0]
         ax.set_xticks(fracs2)
         ax.set_xticklabels(["%.1f" % (1-f) for f in fracs2])
+        ax.set_ylim(bottom_lim, top_lim)
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    fig.tight_layout(pad=0.5)
     plt.savefig(os.path.join(out_dir, '{}_culled_correlation_plot.png'.format(out_tag)), dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
     plt.close()
 
@@ -192,7 +194,8 @@ def make_culled_correlation_paired_plot(results_df, out_dir, out_tag, corr_type,
     plot_df['fracs'] = 1 - plot_df['fracs']  # For consistency with x-axis of culled correlation line plots above.
     sns.scatterplot(data=plot_df, x='regression_culled_{}'.format(corr_type), y='classification_culled_{}'.format(corr_type), hue='model', size='fracs', sizes=(5, 100), palette=palette, hue_order=order, alpha=0.8, ax=ax, linewidth=0, edgecolor='none')
     if corr_type in ['pearson', 'spearman']:
-        bottom_lim, top_lim = 0, 1
+        bottom_lim = min(0, ax.get_ylim()[0], ax.get_xlim()[0])
+        top_lim = max(1, ax.get_ylim()[1], ax.get_xlim()[1])
     else:
         bottom_lim = min(
             plot_df['regression_culled_{}'.format(corr_type)].min(), plot_df['classification_culled_{}'.format(corr_type)].min())
