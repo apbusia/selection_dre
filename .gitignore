@@ -10,3 +10,9 @@ data
 # Model checkpoints/files
 models/
 wandb/
+
+# Experiment outputs
+outputs/
+
+# Bash
+*.sh
