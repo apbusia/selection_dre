@@ -39,14 +39,9 @@ def get_encoding_type(model_path):
     raise ValueError('model\'s encoding type not identified from path: {}'.format(model_path))
 
 
-def get_model_predictions(model, model_type, seqs, encoding, batch_size=128):
+def get_model_predictions(model, model_type, seqs, encoding, batch_size=512):
     n_samples = len(seqs)
-    if model_type in ['linear', 'ann', 'cnn']:
-        enrich_scores = [np.zeros((n_samples, 2))]
-        counts = None
-    elif model_type in ['logistic_linear', 'logistic_ann', 'logistic_cnn']:
-        enrich_scores = None
-        counts = np.ones((n_samples, 2))
+    enrich_scores, counts = None, None
     flatten = False if 'cnn' in model_type else True
     xgen = modeling.get_dataset(
         seqs, np.arange(n_samples), encoding, enrich_scores, counts, batch_size=batch_size, shuffle=False, flatten=flatten, tile=False)
@@ -68,6 +63,7 @@ def main(args):
     data_path, model_paths = args.data_path, args.model_paths
     print('\nLoading data from {}'.format(data_path))
     df = pd.read_csv(data_path)
+    all_seqs = df['seq']
     if args.enrichment_column is not None:
         print('Using enrichment scores in {}.'.format(args.enrichment_column))
         enrich_scores = df[args.enrichment_column].values
@@ -77,6 +73,7 @@ def main(args):
         post_counts = df['count_post'].values + 1
         enrich_scores = data_prep.calculate_enrichment_scores(pre_counts, post_counts, pre_counts.sum(), post_counts.sum())
         enrich_scores = enrich_scores[:, 0]
+    del df
     
     results = {}
     results['meta'] = {
@@ -101,12 +98,12 @@ def main(args):
             test_idx = np.load(idx_path)
             if 'logistic' in model_type:
                 # Adjust logistic indices for fact that dataset was duplicated during training.
-                test_idx = test_idx[test_idx < len(df)]
+                test_idx = test_idx[test_idx < len(all_seqs)]
             truth = enrich_scores[test_idx]
-            seqs = df['seq'].iloc[test_idx].reset_index(drop=True)
+            seqs = all_seqs.iloc[test_idx].reset_index(drop=True) #df['seq'].iloc[test_idx].reset_index(drop=True)
         else:
             truth = enrich_scores
-            seqs = df['seq']
+            seqs = all_seqs #df['seq']
         
         model = keras.models.load_model(model_path)
         encoding_type = get_encoding_type(model_path)
