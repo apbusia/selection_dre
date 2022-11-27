@@ -99,6 +99,9 @@ def main(args):
             if 'logistic' in model_type:
                 # Adjust logistic indices for fact that dataset was duplicated during training.
                 test_idx = test_idx[test_idx < len(all_seqs)]
+            if args.evaluate_train:
+                print('\n\tInverting indices to evaluate on training examples')
+                test_idx = np.delete(np.arange(len(all_seqs)), test_idx)
             truth = enrich_scores[test_idx]
             seqs = all_seqs.iloc[test_idx].reset_index(drop=True) #df['seq'].iloc[test_idx].reset_index(drop=True)
         else:
@@ -118,10 +121,21 @@ def main(args):
         preds = get_model_predictions(model, model_type, seqs, encoding)
         del model
         if 'logistic' in model_type:
-            # Add 1 to output_idx since pre is always index 0. in classification models.
-            preds = logits_to_log_density_ratio(preds, post_idx=args.output_idx+1)
+            if args.output_idx == -1:
+                preds = np.mean([logits_to_log_density_ratio(preds, post_idx=i, pre_idx=i-1) for i in range(1, preds.shape[1])], axis=0)
+            else:
+                # Add 1 to output_idx since pre is always index 0. in classification models.
+                preds = logits_to_log_density_ratio(preds, post_idx=args.output_idx+1)
         else:
-            preds = preds[args.output_idx].flatten()
+            if args.output_idx == -1:
+                preds = np.mean(preds, axis=0).flatten()
+            elif type(preds) == list:
+                # Predictions for multi-output model.
+                preds = preds[args.output_idx].flatten()
+            else:
+                # Predictions for single output model.
+                preds = preds.flatten()
+               
         metrics = evaluation_utils.get_eval_metrics(truth, preds)
         print('\n\tCurrent metrics:')
         evaluation_utils.print_eval_metrics(metrics)
@@ -161,6 +175,7 @@ if __name__ == "__main__":
     parser.add_argument('--enrichment_column', help='column name in counts dataset', type=str)
     parser.add_argument('--output_idx', default=0, help='index of model output to evaluate for multi-output models', type=int)
     parser.add_argument('--idx_paths', help='path to file containing subset of test indices', nargs='+', type=str)
+    parser.add_argument('--evaluate_train', help='whether or not to "invert" test indices in idx_paths to evaluate performance on training examples', action='store_true')
     parser.add_argument('--num_fracs', default=100, help='number of K for computing top K performance metrics', type=int)
     parser.add_argument('--save_path', help='path to which to save output', type=str)
     args = parser.parse_args()
