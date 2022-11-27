@@ -9,6 +9,7 @@ import scipy.stats as stats
 from matplotlib import rcParams
 from tensorflow import keras
 from scipy.special import log_softmax
+from matplotlib.lines import Line2D
 import data_prep
 import modeling
 from run_models import disable_gpu
@@ -36,8 +37,6 @@ def get_model_name(model_path):
         return 'Linear, {}'.format(get_encoding_type(model_path))
     if 'ann' in model_path:
         n_units = re.search('(?<=ann_)(classifier_)?(\d+)x(\d+)', model_path).group(3)
-        if n_units == '1000':
-            n_units = '999'
         return 'NN, {}'.format(n_units)
     if 'cnn' in model_path:
         match = re.search('(?<=cnn_)(classifier_)?(\d+)x(\d+)x(\d+)', model_path)
@@ -58,7 +57,7 @@ def get_color_palette(include_cnn=False):
     ann_palette = sns.color_palette('flare', n_colors=4)
     palette = linear_palette + ann_palette
     order = [
-        'Linear, IS', 'Linear, Neighbors', 'Linear, Pairwise', 'NN, 100', 'NN, 200', 'NN, 500', 'NN, 999']
+        'Linear, IS', 'Linear, Neighbors', 'Linear, Pairwise', 'NN, 100', 'NN, 200', 'NN, 500', 'NN, 1000']
     if include_cnn:
         cnn_palette = sns.color_palette('pink_r', n_colors=4)
         palette = palette + cnn_palette
@@ -69,15 +68,38 @@ def get_color_palette(include_cnn=False):
 def make_negative_selection_plot(results_df, truth_cols, save_file):
     palette, order = get_color_palette(True)    
     
-    # Scatterplot of groundtruth fitnesses
+    # Scatterplot of ground truth fitnesses
     fig, ax = plt.subplots(1, 1, figsize=(2, 2))
-    sns.scatterplot(data=results_df, x=truth_cols[0], y=truth_cols[1], hue='model', style='method', palette=palette, hue_order=order, alpha=0.5, s=10, ax=ax, linewidth=0, edgecolor='none')
+    style_order = ['LER', 'DRC']
+    sns.scatterplot(data=results_df, x=truth_cols[0], y=truth_cols[1], hue='model', style='method', palette=palette, hue_order=order, style_order=style_order, alpha=0.75, s=10, ax=ax, linewidth=0, edgecolor='none', legend=False)
     ax.set_aspect('equal', adjustable='datalim')
-#     ax.set_xlabel('Groundtruth Fitness 1')
-#     ax.set_ylabel('Groundtruth Fitness 2')
-    ax.set_xlabel(r'$F_T$')
-    ax.set_ylabel(r"$F_T'$")
-    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    xlim, ylim = ax.get_xlim(), ax.get_ylim()
+#     sns.kdeplot(data=results_df.loc[results_df['method'] == 'DRC'], x=truth_cols[0], y=truth_cols[1], levels=4, thresh=.2, hue='model', palette=palette, hue_order=order, linewidths=0.5, linestyles='dashed', ax=ax)
+#     sns.kdeplot(data=results_df.loc[results_df['method'] == 'LER'], x=truth_cols[0], y=truth_cols[1], levels=4, thresh=.2, hue='model', palette=palette, hue_order=order, linewidths=0.5, linestyles='dotted', ax=ax)
+    mean_df = results_df[['model', 'method', truth_cols[0], truth_cols[1]]].groupby(['model', 'method']).mean().reset_index()
+    mean_df['method'] = mean_df['method'] + ' Average'
+    style_order = [s + ' Average' for s in style_order]
+    sns.scatterplot(data=mean_df, x=truth_cols[0], y=truth_cols[1], facecolor='none', edgecolor='k', style='method', style_order=style_order, s=10, ax=ax, linewidth=0.5, legend=False) #edgecolor=palette[order.index(mean_df['model'].iloc[0])]
+    corner_coord = (results_df[truth_cols[0]].max(), results_df[truth_cols[1]].min())
+    ax.scatter(corner_coord[0], corner_coord[1], s=10, marker='*', edgecolor='k', facecolor='none', linewidth=0.5)
+    drc_coord = np.concatenate([mean_df[truth_cols[0]].values[mean_df['method'] == 'DRC Average'], mean_df[truth_cols[1]].values[mean_df['method'] == 'DRC Average']])
+    radius = np.linalg.norm(np.array(drc_coord) - np.array(corner_coord))
+    circle = plt.Circle(corner_coord, radius=radius, color='k', fill=False, linewidth=0.5, linestyle='dashed')
+    ax.add_patch(circle)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    ax.set_xlabel(r'$F_T \quad \longrightarrow$')
+    ax.set_ylabel(r"$\longleftarrow \quad F_T'$")
+    # Hack to get legend to display correct colors.
+    color = palette[order.index(results_df['model'].iloc[0])]
+    legend_elements = [
+        Line2D([0], [0], marker='o', label='LER', color=color, markersize=5, linewidth=0, linestyle=''),
+        Line2D([0], [0], marker='o', label='LER Average', markerfacecolor='none', markeredgecolor='k', markersize=5, linewidth=0, linestyle=''),
+        Line2D([0], [0], marker='X', label='DRC', color=color, markersize=5, linewidth=0, linestyle=''),
+        Line2D([0], [0], marker='X', label='DRC Average', markerfacecolor='none', markeredgecolor='k', markersize=5, linewidth=0, linestyle=''),
+        Line2D([0], [0], marker='*', label='Theoretical Ideal', markerfacecolor='none', markeredgecolor='k', markersize=5, linewidth=0, linestyle=''),
+    ]
+    ax.legend(handles=legend_elements, fontsize=10, bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.savefig(save_file, dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
     plt.close()
     return
@@ -89,17 +111,27 @@ def make_objective_paired_plot(results_df, truth_cols, save_file):
     # Paired plot of negative selection objective
     fig, ax = plt.subplots(1, 1, figsize=(2, 2))
     results_df['truth'] = results_df[truth_cols[0]] - results_df[truth_cols[1]]
-    sns.scatterplot(data=results_df, x='pred', y='truth', hue='model', style='method', palette=palette, hue_order=order, alpha=0.5, s=10, ax=ax, linewidth=0, edgecolor='none', legend=False)
-#     ax.set_aspect('equal', adjustable='datalim')
-#     ymin, ymax = ax.get_ylim()
-#     xmin, xmax = ax.get_xlim()
-#     diag_x = np.linspace(min(ymin, xmin), max(ymax, xmax), 10)
-#     ax.plot(diag_x, diag_x, color='k', linestyle='dashed', linewidth=1)
-#     ax.set_xlabel('Groundtruth Fitness 1 - Fitness 2')
-#     ax.set_ylabel('Predicted Fitness 1 - Fitness 2')
-    ax.set_xlabel(r'Groundtruth $\Delta$')
-    ax.set_ylabel(r'Predicted $\Delta$')
-#     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    style_order = ['LER', 'DRC']
+    sns.scatterplot(data=results_df, x='pred', y='truth', hue='model', style='method', palette=palette, hue_order=order, style_order=style_order, alpha=0.75, s=10, ax=ax, linewidth=0, edgecolor='none', legend=False)
+    mean_df = results_df[['model', 'method', 'pred', 'truth']].groupby(['model', 'method']).mean().reset_index()
+    sns.scatterplot(data=mean_df, x='pred', y='truth', style='method', facecolor='none', edgecolor='k', style_order=style_order, s=10, ax=ax, linewidth=0.5, legend=False) #edgecolor=palette[order.index(mean_df['model'].iloc[0])]
+    for v in mean_df['truth'].values:
+        ax.axhline(v, linestyle='dashed', color='k', linewidth=0.5)
+    ax.set_ylabel(r'Ground truth $\Delta \quad \longrightarrow$')
+    ax.set_xlabel(r'Predicted $\Delta$')
+    plt.savefig(save_file, dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
+    plt.close()
+    return
+
+
+def make_objective_boxplot(results_df, truth_cols, save_file):
+    palette, order = get_color_palette(True) 
+    fig, ax = plt.subplots(1, 1, figsize=(1.5, 2))
+    results_df['truth'] = results_df[truth_cols[0]] - results_df[truth_cols[1]]
+    style_dict = {'LER': 'o', 'DRC': 'x'}
+    sns.boxplot(data=results_df, x='method', y='truth', hue='model', palette=palette, hue_order=order, dodge=False, width=0.4, linewidth=0.5, showcaps=False, ax=ax)
+    ax.set_ylabel(r'Ground truth $\Delta \quad \longrightarrow$')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.savefig(save_file, dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
     plt.close()
     return
@@ -113,7 +145,7 @@ def main(args):
     df = pd.read_csv(data_path)
     truth = args.truth_columns if args.truth_columns is not None else [
         'true_enrichment_{}'.format(i) for i in [args.pos_output_idx, args.neg_output_idx]]
-    print('Using groundtruth in:', truth)
+    print('Using ground truth in:', truth)
     df = df[['seq'] + truth]
     idx_paths = args.idx_paths
     
@@ -176,14 +208,16 @@ def main(args):
     plot_df.reset_index(inplace=True, drop=True)
 
     if save_path is not None:
-        print('\nSaving results to {}'.format(save_path))
-        results.to_csv(save_path)
+#         print('\nSaving results to {}'.format(save_path))
+#         results.to_csv(save_path)
         print('\nPlotting selected variants...')
         set_rc_params()
         plot_savefile = os.path.splitext(save_path)[0] + '_plot.png'
         make_negative_selection_plot(plot_df, truth, plot_savefile)
         plot_savefile = os.path.splitext(save_path)[0] + '_plot_paired.png'
         make_objective_paired_plot(plot_df, truth, plot_savefile)
+        plot_savefile = os.path.splitext(save_path)[0] + '_boxplot.png'
+        make_objective_boxplot(plot_df, truth, plot_savefile)
     
     if args.run_mcnemar:
         q = 0.99
@@ -216,7 +250,7 @@ if __name__ == "__main__":
     parser.add_argument('model_paths', help='paths to trained Keras predictive models', nargs='+', type=str)
     parser.add_argument('--pos_output_idx', default=0, help='index of model output for which to positively select', type=int)
     parser.add_argument('--neg_output_idx', default=1, help='index of model output for which to negatively select', type=int)
-    parser.add_argument('--truth_columns', help='column names of groundtruth in counts dataset', type=str, nargs='+')
+    parser.add_argument('--truth_columns', help='column names of ground truth in counts dataset', type=str, nargs='+')
     parser.add_argument('--idx_paths', help='paths to files containing subset of test indices', nargs='+', type=str)
     parser.add_argument('--n_top', default=10, help='number of top selected variants to save/plot', type=int)
     parser.add_argument('--run_mcnemar', help='whether to run McNemars test', action='store_true')
