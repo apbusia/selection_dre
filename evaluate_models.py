@@ -103,10 +103,10 @@ def main(args):
                 print('\n\tInverting indices to evaluate on training examples')
                 test_idx = np.delete(np.arange(len(all_seqs)), test_idx)
             truth = enrich_scores[test_idx]
-            seqs = all_seqs.iloc[test_idx].reset_index(drop=True) #df['seq'].iloc[test_idx].reset_index(drop=True)
+            seqs = all_seqs.iloc[test_idx].reset_index(drop=True)
         else:
             truth = enrich_scores
-            seqs = all_seqs #df['seq']
+            seqs = all_seqs
         
         model = keras.models.load_model(model_path)
         encoding_type = get_encoding_type(model_path)
