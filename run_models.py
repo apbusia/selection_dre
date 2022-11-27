@@ -59,7 +59,7 @@ def disable_gpu(ind_list):
         pass
 
 
-def run_training(seqs, pre_counts, post_counts_list, encoding, model_type, normalize=None,
+def run_training(seqs, pre_counts_list, post_counts_list, encoding, model_type, normalize=None,
                  lr=None, n_hidden=None, hidden_size=None, alpha=None, weighted_loss=None,
                  window_size=None, residual_channels=None, skip_channels=None,
                  train_idx=None, test_idx=None, val_idx=None, epochs=None, batch_size=None,
@@ -78,9 +78,14 @@ def run_training(seqs, pre_counts, post_counts_list, encoding, model_type, norma
     counts = None
     
     if model_type in ['linear', 'ann', 'cnn']:
-        pre_counts = pre_counts + 1
         enrich_scores_list = []
-        for post_counts in post_counts_list:
+        for i, post_counts in enumerate(post_counts_list):
+            # Shared pre-selection pool.
+            if len(pre_counts_list) == 1:
+                pre_counts = pre_counts_list[0] + 1
+            # Different pre-selection pools.
+            else:
+                pre_counts = pre_counts_list[i] + 1
             post_counts = post_counts + 1
             enrich_scores = data_prep.calculate_enrichment_scores(pre_counts, post_counts, pre_counts.sum(), post_counts.sum())
             if normalize:
@@ -97,11 +102,9 @@ def run_training(seqs, pre_counts, post_counts_list, encoding, model_type, norma
             enrich_scores_list.append(enrich_scores)
         monitor = 'val_mean_squared_error'
     elif model_type in ['logistic_linear', 'logistic_ann', 'logistic_cnn']:
-        counts = np.column_stack([pre_counts] + post_counts_list)
-#         counts = counts + 1  # Use same pseudo-count scheme as for regression models for consistency.
+        counts = np.column_stack(pre_counts_list + post_counts_list)
         if normalize:
-            # Reweight counts to avoid exploding gradients but preserve relative amounts in each pool.
-            counts = counts / np.amax(counts)
+            counts = np.amax(np.sum(counts, axis=0)) * counts / np.sum(counts, axis=0)
         monitor = 'val_weighted_sparse_categorical_crossentropy'
         n_outputs = n_outputs + 1
     
@@ -196,17 +199,16 @@ def main(args):
     
     data_df = pd.read_csv(args.data_file)
     seqs = data_df['seq']
-    pre_counts = data_df[args.pre_column]
+    pre_counts = [data_df[c] for c in args.pre_columns]
     post_counts = [data_df[c] for c in args.post_columns]
     
     if args.n_folds == 1:
         print('\nRunning on full dataset...')
         if not args.retain_unsequenced:
-            mask = (pre_counts > 0)
-            for pc in post_counts:
+            mask = np.full(len(seqs), False)
+            for pc in pre_counts + post_counts:
                 mask = mask | (pc > 0)
-#             train_idx = np.arange(len(seqs))[mask]
-            seqs, pre_counts, post_counts = seqs[mask], pre_counts[mask], [pc[mask] for pc in post_counts]
+            seqs, pre_counts, post_counts = seqs[mask], [pc[mask] for pc in pre_counts], [pc[mask] for pc in post_counts]
         n_samples = len(seqs)
         train_metrics, _ = run_training(
             seqs, pre_counts, post_counts, args.encoding, args.model_type, normalize=args.normalize,
@@ -225,8 +227,8 @@ def main(args):
         for i, (train_idx, test_idx) in enumerate(kf.split(seqs)):
             print('\nRunning on fold {}...'.format(i+1))
             if not args.retain_unsequenced:
-                mask = (pre_counts[train_idx] > 0)
-                for pc in post_counts:
+                mask = np.full(len(train_idx), False)
+                for pc in pre_counts + post_counts:
                     mask = mask | (pc[train_idx] > 0)
                 train_idx = train_idx[mask]
             val_idx = None
@@ -261,7 +263,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('data_file', help='path to counts dataset', type=str)
     parser.add_argument('model_type', help='type of model: "linear","ann","cnn","logistic_linear","logistic_ann","logistic_cnn"', type=str)
-    parser.add_argument('--pre_column', default='count_pre', help='column name in counts dataset', type=str)
+    parser.add_argument('--pre_columns', default='count_pre', help='column name in counts dataset', type=str, nargs='+')
     parser.add_argument('--post_columns', default='count_post', help='column name in counts dataset', type=str, nargs='+')
     parser.add_argument("--encoding", default='is', help="sequence encoding to use: 'is', 'neighbors', or 'pairwise'")
     parser.add_argument("--n_hidden", default=3, help="number of hidden layers in nn model", type=int)
