@@ -36,7 +36,8 @@ def main(args):
     df = pd.read_csv(args.data_file)
     
     print('Using {} as fitness'.format(args.fitness_column))
-    df = df[['seq', args.fitness_column]]
+    if not args.keep_columns:
+        df = df[['seq', args.fitness_column]]
     fitness = df[args.fitness_column].values
     if args.q_norm_file is not None:
         print('Applying quantile normalization using log-enrichments from {}'.format(args.q_norm_file))
@@ -86,5 +87,6 @@ if __name__ == '__main__':
     parser.add_argument('--q_norm_file', help='path to counts dataset to use to quantile normalize fitness_column', type=str)
     parser.add_argument('--standardize', help='standardize fitness_column before simulating library proportions', action='store_true')
     parser.add_argument('--save_file', help='output path to which to save generated counts', type=str)
+    parser.add_argument('--keep_columns', help='whether or not to keep all columns in data_file', action='store_true')
     args = parser.parse_args()
     main(args)
