@@ -192,7 +192,7 @@ def make_culled_correlation_paired_plot(results_df, out_dir, out_tag, corr_type,
     class_df.reset_index(inplace=True)
     plot_df = pd.merge(reg_df, class_df, how='outer')
     plot_df['fracs'] = 1 - plot_df['fracs']  # For consistency with x-axis of culled correlation line plots above.
-    sns.scatterplot(data=plot_df, x='regression_culled_{}'.format(corr_type), y='classification_culled_{}'.format(corr_type), hue='model', size='fracs', sizes=(5, 100), palette=palette, hue_order=order, alpha=0.8, ax=ax, linewidth=0, edgecolor='none')
+    sns.scatterplot(data=plot_df, x='regression_culled_{}'.format(corr_type), y='classification_culled_{}'.format(corr_type), hue='model', size='fracs', sizes=(5, 25), palette=palette, hue_order=order, alpha=0.7, ax=ax, linewidth=0, edgecolor='none')
     if corr_type in ['pearson', 'spearman']:
         bottom_lim = min(0, ax.get_ylim()[0], ax.get_xlim()[0])
         top_lim = max(1, ax.get_ylim()[1], ax.get_xlim()[1])
@@ -205,6 +205,7 @@ def make_culled_correlation_paired_plot(results_df, out_dir, out_tag, corr_type,
     bottom_lim, top_lim = bottom_lim - ax_buffer, top_lim + ax_buffer
     ax.set_ylim(bottom_lim, top_lim)
     ax.set_xlim(bottom_lim, top_lim)
+    ax.set_yticks([0.00, 0.25, 0.50, 0.75, 1.00])
     diag_x = np.linspace(bottom_lim, top_lim, 10)
     ax.plot(diag_x, diag_x, color='k', linestyle='dashed', linewidth=1)
     ax.set_xlabel('LER {}'.format(corr_type.capitalize()))
