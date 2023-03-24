@@ -23,12 +23,17 @@ def main(args):
     fig, ax = plt.subplots(figsize=(6 , 2))
 
     df['dataset_labels'] = df['dataset'] + '\n(n=' + df['n_measurements'].astype(str) + ')'
-#     sns.barplot(data=df, x='spearman', y='dataset_labels', hue='method', palette=colors, saturation=0.75, ax=ax)
-#     ax.set_ylabel('', fontsize=10)
-#     ax.set_xlabel('Spearman', fontsize=10)
-    sns.barplot(data=df, y='spearman', x='dataset_labels', hue='method', palette=colors, saturation=0.75, ax=ax)
+    order = df['dataset_labels'].iloc[(-1 * df['n_measurements']).argsort()].unique()
+    bplot = sns.barplot(data=df, y='spearman', x='dataset_labels', order=order, hue='method', palette=colors, saturation=0.75, ax=ax)
     ax.set_ylabel('Spearman', fontsize=10)
     ax.set_xlabel('', fontsize=10)
+    for p in bplot.patches:
+        bplot.annotate('{:.2f}'.format(p.get_height()),
+                       (p.get_x() + p.get_width() / 2., p.get_height()),
+                       fontsize=8,
+                       ha='center', va='center',
+                       xytext=(0, 4.5),
+                       textcoords='offset points')
     
     ax.get_legend().set_title('')
     plt.legend(bbox_to_anchor=(1, 1.05), loc=10, borderaxespad=0.)
