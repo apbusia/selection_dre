@@ -92,7 +92,7 @@ def compile_results_dataframe(result_files_dict):
     return results_df
 
 
-def make_results_stripplot(results_df, metric, out_dir, out_tag, include_cnn=False, best_only=False):
+def make_results_stripplot(results_df, metric, out_dir, out_tag, include_cnn=False, best_only=False, title=None):
     results_df = results_df[['dataset', 'task', 'model', metric]]
     results_df = results_df.groupby(['dataset', 'task', 'model']).mean().reset_index()
     if best_only:
@@ -100,48 +100,52 @@ def make_results_stripplot(results_df, metric, out_dir, out_tag, include_cnn=Fal
         results_df = results_df[idx]
     
     if 'train' in out_tag:
-        dataset_order = [r'AAV recombination ($4.6 \times 10^5$ long)',
-                         r'100-mer peptide ($4.6 \times 10^7$ short)',
-                         r'AAV recombination ($4.6 \times 10^4$ long)',
-                         r'AAV recombination ($4.6 \times 10^3$ long)',
-                         r'avGFP mutagenesis ($4.6 \times 10^5$ long)',
-                         r'7-mer peptide ($4.6 \times 10^7$ short)',
-                         r'50-mer peptide ($4.6 \times 10^7$ short)']
-    else:
         dataset_order = [r'AAV recombination ($4.6 \times 10^3$ long $+ \; 4.6 \times 10^7$ short)',
                          r'AAV recombination ($4.6 \times 10^5$ long)',
-                         r'100-mer peptide ($4.6 \times 10^7$ short)',
+                         r'300-mer insertion ($4.6 \times 10^7$ short)',
                          r'noisy AAV recombination ($4.6 \times 10^5$ long)',
                          r'AAV recombination ($4.6 \times 10^4$ long)',
                          r'avGFP mutagenesis ($4.6 \times 10^5$ long)',
                          r'AAV recombination ($4.6 \times 10^3$ long)',
                          r'AAV recombination ($4.6 \times 10^7$ short)',
                          r'avGFP mutagenesis ($4.6 \times 10^7$ short)',
-                         r'noisy 7-mer peptide ($4.6 \times 10^7$ short)',
-                         r'7-mer peptide ($4.6 \times 10^7$ short)',
-                         r'50-mer peptide ($4.6 \times 10^7$ short)']
+                         r'noisy 21-mer insertion ($4.6 \times 10^7$ short)',
+                         r'21-mer insertion ($4.6 \times 10^7$ short)',
+                         r'150-mer insertion ($4.6 \times 10^7$ short)']
+    else:
+        dataset_order = [r'AAV recombination ($4.6 \times 10^3$ long $+ \; 4.6 \times 10^7$ short)',
+                         r'AAV recombination ($4.6 \times 10^5$ long)',
+                         r'300-mer insertion ($4.6 \times 10^7$ short)',
+                         r'noisy AAV recombination ($4.6 \times 10^5$ long)',
+                         r'AAV recombination ($4.6 \times 10^4$ long)',
+                         r'avGFP mutagenesis ($4.6 \times 10^5$ long)',
+                         r'AAV recombination ($4.6 \times 10^3$ long)',
+                         r'AAV recombination ($4.6 \times 10^7$ short)',
+                         r'avGFP mutagenesis ($4.6 \times 10^7$ short)',
+                         r'noisy 21-mer insertion ($4.6 \times 10^7$ short)',
+                         r'21-mer insertion ($4.6 \times 10^7$ short)',
+                         r'150-mer insertion ($4.6 \times 10^7$ short)']
         
     f, ax = plt.subplots(1, 1, figsize=(4, 4 * len(dataset_order) / 12))
     palette, hue_order = get_color_palette(include_cnn)
     markers = ['o', 'X', 'd']
     marker_order = ['LER', 'DRC', 'Observed LE']
-    best_only_colors = sns.color_palette('tab20', n_colors=3)
-    for i, t in enumerate(results_df['task'].unique()): #['LER', 'Observed LE', 'DRC']
+    best_only_colors = sns.color_palette('colorblind', n_colors=7)
+    best_only_colors = sns.color_palette(list(best_only_colors[:2]) + list(best_only_colors[-1:])) # Avoid blue + green in color palette.
+    for i, t in enumerate(results_df['task'].unique()):
         legend = True if i == 0 else False
         task_df = results_df[results_df['task'] == t]
         color_kwargs = dict(color=best_only_colors[marker_order.index(t)]) if best_only else dict(hue='model', hue_order=hue_order, palette=palette)
         sns.stripplot(data=task_df, y='dataset', x=metric, order=dataset_order,
                       marker=markers[marker_order.index(t)], size=5,
                       jitter=not best_only, dodge=False, edgecolor='none',  ax=ax,
-                      **color_kwargs) #legend=legend,
+                      **color_kwargs)
     if best_only:
         for tick_loc, dataset in zip(ax.get_yticks(), dataset_order):
             dataset_df = results_df[results_df['dataset'] == dataset]
             min_metric = dataset_df[metric].min()
             max_metric = dataset_df[metric].max()
             ax.hlines(tick_loc, min_metric, max_metric, lw=1, colors=['k'])
-#     ax.set_xlabel('')
-#     ax.set_xticklabels(ax.get_xticklabels(), rotation=60, ha='right', fontsize=8)
     ax.set_ylabel('')
     ax.set_yticklabels(ax.get_yticklabels(), fontsize=10)
     tag = 'MSE'
@@ -149,7 +153,6 @@ def make_results_stripplot(results_df, metric, out_dir, out_tag, include_cnn=Fal
         tag = 'Pearson'
     if metric == 'spearman_r':
         tag = 'Spearman'
-#     ax.set_ylabel(tag)
     ax.set_xlabel(tag, fontsize=10)
     handles, labels = ax.get_legend_handles_labels()
     handles = handles[:len(hue_order)]
@@ -160,7 +163,8 @@ def make_results_stripplot(results_df, metric, out_dir, out_tag, include_cnn=Fal
         Line2D([0], [0], marker='d', label='cLE', color=legend_colors[markers.index('d')], markersize=5, linewidth=0, linestyle=''),
     ]
     ax.legend(handles=handles + additional_handles, fontsize=10, bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-#     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)#.get_texts()[-1].set_text('Error Bars')
+    if title is not None:
+        ax.set_title(title, fontsize=12)
     plt.savefig(os.path.join(out_dir, '{}_results_summary_plot.png'.format(out_tag)), dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
     plt.close()
 
@@ -175,9 +179,9 @@ def make_results_barplot(results_df, metric, out_dir, out_tag, include_cnn=False
                          r'AAV recombination ($4.6 \times 10^4$ long)',
                          r'AAV recombination ($4.6 \times 10^3$ long)',
                          r'avGFP mutagenesis ($4.6 \times 10^5$ long)',
-                         r'100-mer peptide ($4.6 \times 10^7$ short)',
-                         r'50-mer peptide ($4.6 \times 10^7$ short)',
-                         r'7-mer peptide ($4.6 \times 10^7$ short)']
+                         r'300-mer insertion ($4.6 \times 10^7$ short)',
+                         r'150-mer insertion ($4.6 \times 10^7$ short)',
+                         r'21-mer insertion ($4.6 \times 10^7$ short)']
     else:
         dataset_order = [r'AAV recombination ($4.6 \times 10^5$ long)',
                          r'noisy AAV recombination ($4.6 \times 10^5$ long)',
@@ -187,13 +191,13 @@ def make_results_barplot(results_df, metric, out_dir, out_tag, include_cnn=False
                          r'AAV recombination ($4.6 \times 10^3$ long $+ \; 4.6 \times 10^7$ short)',
                          r'avGFP mutagenesis ($4.6 \times 10^5$ long)',
                          r'avGFP mutagenesis ($4.6 \times 10^7$ short)',
-                         r'100-mer peptide ($4.6 \times 10^7$ short)',
-                         r'50-mer peptide ($4.6 \times 10^7$ short)',
-                         r'7-mer peptide ($4.6 \times 10^7$ short)',
-                         r'noisy 7-mer peptide ($4.6 \times 10^7$ short)']
+                         r'300-mer insertion ($4.6 \times 10^7$ short)',
+                         r'150-mer insertion ($4.6 \times 10^7$ short)',
+                         r'21-mer insertion ($4.6 \times 10^7$ short)',
+                         r'noisy 21-mer insertion ($4.6 \times 10^7$ short)']
     
     f, ax = plt.subplots(1, 1, figsize=(4, 4 * len(dataset_order) / 12))
-    palette = sns.color_palette('tab20', n_colors=3)
+    palette = sns.color_palette('colorblind', n_colors=3)
     hue_order = ['Observed LE', 'LER', 'DRC']
     sns.barplot(data=results_df, y=metric, x='dataset', hue='task', order=dataset_order, hue_order=hue_order, palette=palette, ax=ax)
     ax.set_xticklabels(ax.get_xticklabels(), rotation=60, ha='right', fontsize=8)
@@ -232,7 +236,7 @@ def main(args):
     include_cnn = args.include_cnn
     
     train_result_files_dict = {
-        r'7-mer peptide ($4.6 \times 10^7$ short)': [
+        r'21-mer insertion ($4.6 \times 10^7$ short)': [
             os.path.join(results_dir, 'observed_enrichment_sim_nnk_7_epistatic_140_db_train_results.npy'),
             os.path.join(results_dir, 'is_ann_2x1000_weighted_sim_nnk_7_epistatic_140_db_train_results.npy'),
             os.path.join(results_dir, 'is_ann_2x100_weighted_sim_nnk_7_epistatic_140_db_train_results.npy'),
@@ -250,7 +254,7 @@ def main(args):
             os.path.join(results_dir, 'pairwise_linear_classifier_sim_nnk_7_epistatic_140_db_train_results.npy'),
             
         ],
-        r'50-mer peptide ($4.6 \times 10^7$ short)': [
+        r'150-mer insertion ($4.6 \times 10^7$ short)': [
             os.path.join(results_dir, 'observed_enrichment_sim_nnk_50_epistatic_1000_db_train_results.npy'),
             os.path.join(results_dir, 'is_ann_classifier_2x1000_sim_nnk_50_epistatic_1000_db_train_results.npy'),
             os.path.join(results_dir, 'is_ann_classifier_2x100_sim_nnk_50_epistatic_1000_db_train_results.npy'),
@@ -263,7 +267,7 @@ def main(args):
             os.path.join(results_dir, 'is_ann_2x500_weighted_sim_nnk_50_epistatic_1000_db_train_results.npy'),
             os.path.join(results_dir, 'is_linear_weighted_sim_nnk_50_epistatic_1000_db_train_results.npy'),
         ],
-        r'100-mer peptide ($4.6 \times 10^7$ short)': [
+        r'300-mer insertion ($4.6 \times 10^7$ short)': [
             os.path.join(results_dir, 'observed_enrichment_sim_nnk_100_epistatic_2000_db_train_results.npy'),
             os.path.join(results_dir, 'is_ann_2x1000_weighted_sim_nnk_100_epistatic_2000_db_train_results.npy'),
             os.path.join(results_dir, 'is_ann_2x100_weighted_sim_nnk_100_epistatic_2000_db_train_results.npy'),
@@ -370,10 +374,78 @@ def main(args):
             os.path.join(results_dir, 'is_linear_weighted_sim_recomb_7_4K_epistatic_15020_db_train_results.npy'),
             os.path.join(results_dir, 'neighbors_linear_weighted_sim_recomb_7_4K_epistatic_15020_db_train_results.npy'),
         ],
-    }
+        r'avGFP mutagenesis ($4.6 \times 10^7$ short)': [
+            os.path.join(results_dir, 'is_cnn_16x5x100_weighted_sim_gfp_mut0.1_epistatic_4760_short_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_2x5x100_weighted_sim_gfp_mut0.1_epistatic_4760_short_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_4x5x100_weighted_sim_gfp_mut0.1_epistatic_4760_short_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_8x5x100_weighted_sim_gfp_mut0.1_epistatic_4760_short_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_classifier_16x5x100_sim_gfp_mut0.1_epistatic_4760_short_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_classifier_2x5x100_sim_gfp_mut0.1_epistatic_4760_short_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_classifier_4x5x100_sim_gfp_mut0.1_epistatic_4760_short_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_classifier_8x5x100_sim_gfp_mut0.1_epistatic_4760_short_db_train_results.npy'),
+        ],
+        r'noisy AAV recombination ($4.6 \times 10^5$ long)': [
+            os.path.join(results_dir, 'is_ann_2x1000_weighted_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_ann_2x100_weighted_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_ann_2x200_weighted_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_ann_2x500_weighted_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_ann_classifier_2x1000_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_ann_classifier_2x100_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_ann_classifier_2x200_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_ann_classifier_2x500_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_16x5x100_weighted_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_2x5x100_weighted_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_4x5x100_weighted_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_8x5x100_weighted_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_classifier_16x5x100_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_classifier_2x5x100_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_classifier_4x5x100_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_classifier_8x5x100_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_linear_classifier_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_linear_weighted_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'neighbors_linear_classifier_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'neighbors_linear_weighted_sim_recomb_7_epistatic_15020_noisy_db_train_results.npy'),
+        ],
+        r'AAV recombination ($4.6 \times 10^7$ short)': [
+            os.path.join(results_dir, 'is_cnn_16x5x100_weighted_sim_recomb_7_epistatic_15020_short_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_2x5x100_weighted_sim_recomb_7_epistatic_15020_short_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_4x5x100_weighted_sim_recomb_7_epistatic_15020_short_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_8x5x100_weighted_sim_recomb_7_epistatic_15020_short_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_classifier_2x5x100_sim_recomb_7_epistatic_15020_short_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_classifier_4x5x100_sim_recomb_7_epistatic_15020_short_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_classifier_8x5x100_sim_recomb_7_epistatic_15020_short_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_classifier_16x5x100_sim_recomb_7_epistatic_15020_short_db_train_results.npy'),
+        ],
+        r'AAV recombination ($4.6 \times 10^3$ long $+ \; 4.6 \times 10^7$ short)': [
+            os.path.join(results_dir, 'is_cnn_16x5x100_weighted_sim_recomb_7_epistatic_15020_long_4K_short_46M_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_2x5x100_weighted_sim_recomb_7_epistatic_15020_long_4K_short_46M_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_4x5x100_weighted_sim_recomb_7_epistatic_15020_long_4K_short_46M_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_8x5x100_weighted_sim_recomb_7_epistatic_15020_long_4K_short_46M_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_classifier_16x5x100_sim_recomb_7_epistatic_15020_long_4K_short_46M_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_classifier_2x5x100_sim_recomb_7_epistatic_15020_long_4K_short_46M_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_classifier_4x5x100_sim_recomb_7_epistatic_15020_long_4K_short_46M_db_train_results.npy'),
+            os.path.join(results_dir, 'is_cnn_classifier_8x5x100_sim_recomb_7_epistatic_15020_long_4K_short_46M_db_train_results.npy'),
+        ],
+        r'noisy 21-mer insertion ($4.6 \times 10^7$ short)': [
+            os.path.join(results_dir, 'is_ann_2x1000_weighted_sim_nnk_7_epistatic_140_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_ann_2x100_weighted_sim_nnk_7_epistatic_140_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_ann_2x200_weighted_sim_nnk_7_epistatic_140_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_ann_2x500_weighted_sim_nnk_7_epistatic_140_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_ann_classifier_2x1000_sim_nnk_7_epistatic_140_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_ann_classifier_2x100_sim_nnk_7_epistatic_140_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_ann_classifier_2x200_sim_nnk_7_epistatic_140_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_ann_classifier_2x500_sim_nnk_7_epistatic_140_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_linear_classifier_sim_nnk_7_epistatic_140_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'is_linear_weighted_sim_nnk_7_epistatic_140_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'neighbors_linear_classifier_sim_nnk_7_epistatic_140_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'neighbors_linear_weighted_sim_nnk_7_epistatic_140_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'pairwise_linear_classifier_sim_nnk_7_epistatic_140_noisy_db_train_results.npy'),
+            os.path.join(results_dir, 'pairwise_linear_weighted_sim_nnk_7_epistatic_140_noisy_db_train_results.npy'),
+        ],
+    } 
     
     val_result_files_dict = {
-        r'7-mer peptide ($4.6 \times 10^7$ short)': [
+        r'21-mer insertion ($4.6 \times 10^7$ short)': [
             os.path.join(results_dir, 'is_ann_2x1000_weighted_sim_nnk_7_epistatic_140_db_results.npy'),
             os.path.join(results_dir, 'is_ann_2x100_weighted_sim_nnk_7_epistatic_140_db_results.npy'),
             os.path.join(results_dir, 'is_ann_2x200_weighted_sim_nnk_7_epistatic_140_db_results.npy'),
@@ -389,7 +461,7 @@ def main(args):
             os.path.join(results_dir, 'neighbors_linear_classifier_sim_nnk_7_epistatic_140_db_results.npy'),
             os.path.join(results_dir, 'pairwise_linear_classifier_sim_nnk_7_epistatic_140_db_results.npy'),
         ],
-        r'noisy 7-mer peptide ($4.6 \times 10^7$ short)': [
+        r'noisy 21-mer insertion ($4.6 \times 10^7$ short)': [
             os.path.join(results_dir, 'is_ann_2x1000_weighted_sim_nnk_7_epistatic_140_noisy_db_results.npy'),
             os.path.join(results_dir, 'is_ann_2x100_weighted_sim_nnk_7_epistatic_140_noisy_db_results.npy'),
             os.path.join(results_dir, 'is_ann_2x200_weighted_sim_nnk_7_epistatic_140_noisy_db_results.npy'),
@@ -405,7 +477,7 @@ def main(args):
             os.path.join(results_dir, 'neighbors_linear_classifier_sim_nnk_7_epistatic_140_noisy_db_results.npy'),
             os.path.join(results_dir, 'pairwise_linear_classifier_sim_nnk_7_epistatic_140_noisy_db_results.npy'),
         ],
-        r'50-mer peptide ($4.6 \times 10^7$ short)': [
+        r'150-mer insertion ($4.6 \times 10^7$ short)': [
             os.path.join(results_dir, 'is_ann_classifier_2x1000_sim_nnk_50_epistatic_1000_db_results.npy'),
             os.path.join(results_dir, 'is_ann_classifier_2x100_sim_nnk_50_epistatic_1000_db_results.npy'),
             os.path.join(results_dir, 'is_ann_classifier_2x200_sim_nnk_50_epistatic_1000_db_results.npy'),
@@ -421,7 +493,7 @@ def main(args):
             os.path.join(results_dir, 'neighbors_linear_weighted_sim_nnk_50_epistatic_1000_db_results.npy'),
             os.path.join(results_dir, 'pairwise_linear_weighted_sim_nnk_50_epistatic_1000_db_results.npy'),
         ],
-        r'100-mer peptide ($4.6 \times 10^7$ short)': [
+        r'300-mer insertion ($4.6 \times 10^7$ short)': [
             os.path.join(results_dir, 'is_ann_2x1000_weighted_sim_nnk_100_epistatic_2000_db_results.npy'),
             os.path.join(results_dir, 'is_ann_2x100_weighted_sim_nnk_100_epistatic_2000_db_results.npy'),
             os.path.join(results_dir, 'is_ann_2x200_weighted_sim_nnk_100_epistatic_2000_db_results.npy'),
@@ -582,7 +654,8 @@ def main(args):
     results_df = compile_results_dataframe(train_result_files_dict)
     make_results_stripplot(results_df, args.correlation,
                            args.out_dir, 'train' + args.out_description,
-                           include_cnn=args.include_cnn, best_only=args.best_only)
+                           include_cnn=args.include_cnn, best_only=args.best_only,
+                           title='Estimation')
     make_results_barplot(results_df, args.correlation,
                          args.out_dir, 'train' + args.out_description,
                          include_cnn=args.include_cnn)
@@ -591,7 +664,8 @@ def main(args):
     results_df = compile_results_dataframe(val_result_files_dict)
     make_results_stripplot(results_df, args.correlation,
                            args.out_dir, 'val' + args.out_description,
-                           include_cnn=args.include_cnn, best_only=args.best_only)
+                           include_cnn=args.include_cnn, best_only=args.best_only,
+                           title='Prediction')
     make_results_barplot(results_df, args.correlation,
                          args.out_dir, 'val' + args.out_description,
                          include_cnn=args.include_cnn)

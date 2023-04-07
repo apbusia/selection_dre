@@ -71,33 +71,33 @@ def make_negative_selection_plot(results_df, truth_cols, save_file):
     # Scatterplot of ground truth fitnesses
     fig, ax = plt.subplots(1, 1, figsize=(2, 2))
     style_order = ['LER', 'DRC']
-    sns.scatterplot(data=results_df, x=truth_cols[0], y=truth_cols[1], hue='model', style='method', palette=palette, hue_order=order, style_order=style_order, alpha=0.75, s=10, ax=ax, linewidth=0, edgecolor='none', legend=False)
+    palette = sns.color_palette('colorblind', n_colors=3)[:2]
+    sns.scatterplot(data=results_df, x=truth_cols[0], y=truth_cols[1], hue='method', style='method', palette=palette, hue_order=style_order, style_order=style_order, alpha=0.75, s=10, ax=ax, linewidth=0, edgecolor='none', legend=False)
     ax.set_aspect('equal', adjustable='datalim')
     xlim, ylim = ax.get_xlim(), ax.get_ylim()
-#     sns.kdeplot(data=results_df.loc[results_df['method'] == 'DRC'], x=truth_cols[0], y=truth_cols[1], levels=4, thresh=.2, hue='model', palette=palette, hue_order=order, linewidths=0.5, linestyles='dashed', ax=ax)
-#     sns.kdeplot(data=results_df.loc[results_df['method'] == 'LER'], x=truth_cols[0], y=truth_cols[1], levels=4, thresh=.2, hue='model', palette=palette, hue_order=order, linewidths=0.5, linestyles='dotted', ax=ax)
     mean_df = results_df[['model', 'method', truth_cols[0], truth_cols[1]]].groupby(['model', 'method']).mean().reset_index()
     mean_df['method'] = mean_df['method'] + ' Average'
     style_order = [s + ' Average' for s in style_order]
-    sns.scatterplot(data=mean_df, x=truth_cols[0], y=truth_cols[1], facecolor='none', edgecolor='k', style='method', style_order=style_order, s=10, ax=ax, linewidth=0.5, legend=False) #edgecolor=palette[order.index(mean_df['model'].iloc[0])]
+    sns.scatterplot(data=mean_df, x=truth_cols[0], y=truth_cols[1], facecolor='none', style='method', style_order=style_order, edgecolor='k', s=10, ax=ax, linewidth=0.5, legend=False)
     corner_coord = (results_df[truth_cols[0]].max(), results_df[truth_cols[1]].min())
     ax.scatter(corner_coord[0], corner_coord[1], s=10, marker='*', edgecolor='k', facecolor='none', linewidth=0.5)
     drc_coord = np.concatenate([mean_df[truth_cols[0]].values[mean_df['method'] == 'DRC Average'], mean_df[truth_cols[1]].values[mean_df['method'] == 'DRC Average']])
     radius = np.linalg.norm(np.array(drc_coord) - np.array(corner_coord))
     circle = plt.Circle(corner_coord, radius=radius, color='k', fill=False, linewidth=0.5, linestyle='dashed')
+    plt.plot([drc_coord[0], corner_coord[0]], [drc_coord[1], corner_coord[1]], color=palette[style_order.index('DRC Average')], linestyle='dashed', linewidth=0.5)
+    ler_coord = np.concatenate([mean_df[truth_cols[0]].values[mean_df['method'] == 'LER Average'], mean_df[truth_cols[1]].values[mean_df['method'] == 'LER Average']])
+    plt.plot([ler_coord[0], corner_coord[0]], [ler_coord[1], corner_coord[1]], color=palette[style_order.index('LER Average')], linestyle='dashed', linewidth=0.5)
     ax.add_patch(circle)
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
-    ax.set_xlabel(r'$F_T \quad \longrightarrow$')
-    ax.set_ylabel(r"$\longleftarrow \quad F_T'$")
-    # Hack to get legend to display correct colors.
-    color = palette[order.index(results_df['model'].iloc[0])]
+    ax.set_xlabel(r'Positive fitness $\quad \longrightarrow$')
+    ax.set_ylabel(r"$\longleftarrow \quad$ Negative fitness")
     legend_elements = [
-        Line2D([0], [0], marker='o', label='LER', color=color, markersize=5, linewidth=0, linestyle=''),
-        Line2D([0], [0], marker='o', label='LER Average', markerfacecolor='none', markeredgecolor='k', markersize=5, linewidth=0, linestyle=''),
-        Line2D([0], [0], marker='X', label='DRC', color=color, markersize=5, linewidth=0, linestyle=''),
-        Line2D([0], [0], marker='X', label='DRC Average', markerfacecolor='none', markeredgecolor='k', markersize=5, linewidth=0, linestyle=''),
-        Line2D([0], [0], marker='*', label='Theoretical Ideal', markerfacecolor='none', markeredgecolor='k', markersize=5, linewidth=0, linestyle=''),
+        Line2D([0], [0], marker='o', label='wLER', color=palette[style_order.index('LER Average')], markersize=5, linewidth=0, linestyle=''),
+        Line2D([0], [0], marker='o', label='wLER average', markerfacecolor='none', markeredgecolor='k', markersize=5, linewidth=0, linestyle=''),
+        Line2D([0], [0], marker='X', label='MBE', color=palette[style_order.index('DRC Average')], markersize=5, linewidth=0, linestyle=''),
+        Line2D([0], [0], marker='X', label='MBE average', markerfacecolor='none', markeredgecolor='k', markersize=5, linewidth=0, linestyle=''),
+        Line2D([0], [0], marker='*', label='Theoretical ideal', markerfacecolor='none', markeredgecolor='k', markersize=5, linewidth=0, linestyle=''),
     ]
     ax.legend(handles=legend_elements, fontsize=10, bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     plt.savefig(save_file, dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
@@ -151,7 +151,7 @@ def main(args):
     
     results, plot_df = None, None
     for i, model_path in enumerate(model_paths):
-        disable_gpu([0, 1])
+        disable_gpu([0, 1, 2, 3])
         keras.backend.clear_session()
         
         print('\nUsing model {}'.format(model_path))
