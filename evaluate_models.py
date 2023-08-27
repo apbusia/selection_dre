@@ -73,6 +73,7 @@ def main(args):
         post_counts = df['count_post'].values + 1
         enrich_scores = data_prep.calculate_enrichment_scores(pre_counts, post_counts, pre_counts.sum(), post_counts.sum())
         enrich_scores = enrich_scores[:, 0]
+    count_sum = df['post_count_0'].values + df['pre_count_0'].values
     del df
     
     results = {}
@@ -87,7 +88,7 @@ def main(args):
     
     results['metrics'] = defaultdict(list)
     for i, model_path in enumerate(model_paths):
-        disable_gpu([0, 1])
+        disable_gpu([0, 1, 2, 3])
         keras.backend.clear_session()
         
         print('\nUsing model {}'.format(model_path))
@@ -102,13 +103,16 @@ def main(args):
             if args.evaluate_train:
                 print('\n\tInverting indices to evaluate on training examples')
                 test_idx = np.delete(np.arange(len(all_seqs)), test_idx)
+                mask = np.full(len(test_idx), False)
+                mask = mask | (count_sum[test_idx] > 0)
+                test_idx = test_idx[mask]
             truth = enrich_scores[test_idx]
             seqs = all_seqs.iloc[test_idx].reset_index(drop=True)
         else:
             truth = enrich_scores
             seqs = all_seqs
         
-        model = keras.models.load_model(model_path)
+        model = keras.models.load_model(model_path, compile=False)
         encoding_type = get_encoding_type(model_path)
         if encoding_type == 'pairwise':
             encoding = data_prep.index_encode_is_plus_pairwise

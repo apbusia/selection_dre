@@ -43,6 +43,8 @@ def main(args):
     
     # Count distributions
     ax = axes[2]
+    print('Proportion of zeros: Pre = {:.6f}, Post={:.6f}'.format(
+        np.mean(observed_df[args.pre_column] == 0), np.mean(observed_df[args.post_column] == 0)))
     observed_df[args.pre_column] = observed_df[args.pre_column] + 1 * (observed_df[args.pre_column] == 0)  # Add pseudocount for log-scale
     observed_df[args.post_column] = observed_df[args.post_column] + 1 * (observed_df[args.post_column] == 0) # Add pseudocount for log-scale
     observed_df = observed_df.rename(columns={args.pre_column: 'pre', args.post_column: 'post'})

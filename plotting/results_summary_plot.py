@@ -53,7 +53,7 @@ def get_encoding_type(model_path):
         return 'IS'
 
 
-def get_color_palette(include_cnn=False):
+def get_color_palette(include_cnn=False, include_deseq2=False):
     linear_palette = sns.color_palette('crest', n_colors=3)
     ann_palette = sns.color_palette('flare', n_colors=4)
     palette = linear_palette + ann_palette
@@ -63,15 +63,20 @@ def get_color_palette(include_cnn=False):
         cnn_palette = sns.color_palette('pink_r', n_colors=4)
         palette = palette + cnn_palette
         order = order + ['CNN, 2x5x100', 'CNN, 4x5x100', 'CNN, 8x5x100', 'CNN, 16x5x100']
-    palette = palette + sns.color_palette('gray', n_colors=1)
-    order = order + ['Observed LE']
+    count_based_methods = ['Observed LE']
+    if include_deseq2:
+        count_based_methods.append('DEseq2')
+    palette = palette + sns.color_palette('gray', n_colors=len(count_based_methods))
+    order = order + count_based_methods
     return palette, order
 
 
-def compile_results_dataframe(result_files_dict):
+def compile_results_dataframe(result_files_dict, include_deseq2=False):
     results_df = None
     for dataset_name, file_list in result_files_dict.items():
         for r_file in file_list:
+            if not include_deseq2 and 'DEseq2' in r_file:
+                continue
             cur_results = np.load(r_file, allow_pickle=True).item()
             if 'culled_ndcg' in cur_results['metrics']:
                 del cur_results['metrics']['culled_ndcg']
@@ -79,6 +84,9 @@ def compile_results_dataframe(result_files_dict):
             if 'observed_enrichment' in r_file:
                 cur_df['model'] = ['Observed LE'] * len(cur_df)
                 cur_df['task'] = ['Observed LE'] * len(cur_df)
+            elif 'DEseq2' in r_file:
+                cur_df['model'] = ['DEseq2'] * len(cur_df)
+                cur_df['task'] = ['DEseq2'] * len(cur_df)
             else:
                 cur_df['model'] = pd.Series(cur_results['meta']['model_paths']).apply(get_model_name)
                 cur_df['task'] = pd.Series(cur_results['meta']['model_paths']).apply(get_task)
@@ -92,46 +100,37 @@ def compile_results_dataframe(result_files_dict):
     return results_df
 
 
-def make_results_stripplot(results_df, metric, out_dir, out_tag, include_cnn=False, best_only=False, title=None):
+def make_results_stripplot(results_df, metric, out_dir, out_tag, include_cnn=False, best_only=False, title=None, include_deseq2=False):
     results_df = results_df[['dataset', 'task', 'model', metric]]
     results_df = results_df.groupby(['dataset', 'task', 'model']).mean().reset_index()
     if best_only:
-        idx = results_df.groupby(['dataset', 'task'])[metric].transform(max) == results_df[metric]
+        best_fn = min if metric == 'mse' else max
+        idx = results_df.groupby(['dataset', 'task'])[metric].transform(best_fn) == results_df[metric]
         results_df = results_df[idx]
     
-    if 'train' in out_tag:
-        dataset_order = [r'AAV recombination ($4.6 \times 10^3$ long $+ \; 4.6 \times 10^7$ short)',
-                         r'AAV recombination ($4.6 \times 10^5$ long)',
-                         r'300-mer insertion ($4.6 \times 10^7$ short)',
-                         r'noisy AAV recombination ($4.6 \times 10^5$ long)',
-                         r'AAV recombination ($4.6 \times 10^4$ long)',
-                         r'avGFP mutagenesis ($4.6 \times 10^5$ long)',
-                         r'AAV recombination ($4.6 \times 10^3$ long)',
-                         r'AAV recombination ($4.6 \times 10^7$ short)',
-                         r'avGFP mutagenesis ($4.6 \times 10^7$ short)',
-                         r'noisy 21-mer insertion ($4.6 \times 10^7$ short)',
-                         r'21-mer insertion ($4.6 \times 10^7$ short)',
-                         r'150-mer insertion ($4.6 \times 10^7$ short)']
-    else:
-        dataset_order = [r'AAV recombination ($4.6 \times 10^3$ long $+ \; 4.6 \times 10^7$ short)',
-                         r'AAV recombination ($4.6 \times 10^5$ long)',
-                         r'300-mer insertion ($4.6 \times 10^7$ short)',
-                         r'noisy AAV recombination ($4.6 \times 10^5$ long)',
-                         r'AAV recombination ($4.6 \times 10^4$ long)',
-                         r'avGFP mutagenesis ($4.6 \times 10^5$ long)',
-                         r'AAV recombination ($4.6 \times 10^3$ long)',
-                         r'AAV recombination ($4.6 \times 10^7$ short)',
-                         r'avGFP mutagenesis ($4.6 \times 10^7$ short)',
-                         r'noisy 21-mer insertion ($4.6 \times 10^7$ short)',
-                         r'21-mer insertion ($4.6 \times 10^7$ short)',
-                         r'150-mer insertion ($4.6 \times 10^7$ short)']
+    dataset_order = [r'21-mer insertion ($4.6 \times 10^7$ short)',
+                     r'noisy 21-mer insertion ($4.6 \times 10^7$ short)',
+                     r'150-mer insertion ($4.6 \times 10^7$ short)',
+                     r'300-mer insertion ($4.6 \times 10^7$ short)',
+                     r'avGFP mutagenesis ($4.6 \times 10^5$ long)',
+                     r'avGFP mutagenesis ($4.6 \times 10^7$ short)',
+                     r'AAV recombination ($4.6 \times 10^5$ long)',
+                     r'noisy AAV recombination ($4.6 \times 10^5$ long)',
+                     r'AAV recombination ($4.6 \times 10^4$ long)',
+                     r'AAV recombination ($4.6 \times 10^3$ long)',
+                     r'AAV recombination ($4.6 \times 10^7$ short)',
+                     r'AAV recombination ($4.6 \times 10^3$ long $+ \; 4.6 \times 10^7$ short)']
         
     f, ax = plt.subplots(1, 1, figsize=(4, 4 * len(dataset_order) / 12))
-    palette, hue_order = get_color_palette(include_cnn)
+    palette, hue_order = get_color_palette(include_cnn, include_deseq2)
     markers = ['o', 'X', 'd']
     marker_order = ['LER', 'DRC', 'Observed LE']
-    best_only_colors = sns.color_palette('colorblind', n_colors=7)
-    best_only_colors = sns.color_palette(list(best_only_colors[:2]) + list(best_only_colors[-1:])) # Avoid blue + green in color palette.
+    colorblind_colors = sns.color_palette('colorblind', n_colors=7)
+    best_only_colors = sns.color_palette(list(colorblind_colors[:2]) + list(colorblind_colors[-1:])) # Avoid blue + green in color palette.
+    if include_deseq2:
+        markers.append('s')
+        marker_order.append('DEseq2')
+        best_only_colors.append(colorblind_colors[-4])
     for i, t in enumerate(results_df['task'].unique()):
         legend = True if i == 0 else False
         task_df = results_df[results_df['task'] == t]
@@ -162,13 +161,16 @@ def make_results_stripplot(results_df, metric, out_dir, out_tag, include_cnn=Fal
         Line2D([0], [0], marker='X', label='MBE', color=legend_colors[markers.index('X')], markersize=5, linewidth=0, linestyle=''),
         Line2D([0], [0], marker='d', label='cLE', color=legend_colors[markers.index('d')], markersize=5, linewidth=0, linestyle=''),
     ]
+    if include_deseq2:
+        additional_handles.append(
+            Line2D([0], [0], marker='s', label='DEseq2', color=legend_colors[markers.index('s')], markersize=5, linewidth=0, linestyle=''))
     ax.legend(handles=handles + additional_handles, fontsize=10, bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     if title is not None:
         ax.set_title(title, fontsize=12)
     plt.savefig(os.path.join(out_dir, '{}_results_summary_plot.png'.format(out_tag)), dpi=300, transparent=False, bbox_inches='tight', facecolor='white')
     plt.close()
 
-def make_results_barplot(results_df, metric, out_dir, out_tag, include_cnn=False):
+def make_results_barplot(results_df, metric, out_dir, out_tag, include_cnn=False, include_deseq2=False):
     results_df = results_df[['dataset', 'task', 'model', metric]]
     results_df = results_df.groupby(['dataset', 'task', 'model']).mean().reset_index()
     idx = results_df.groupby(['dataset', 'task'])[metric].transform(max) == results_df[metric]
@@ -197,8 +199,10 @@ def make_results_barplot(results_df, metric, out_dir, out_tag, include_cnn=False
                          r'noisy 21-mer insertion ($4.6 \times 10^7$ short)']
     
     f, ax = plt.subplots(1, 1, figsize=(4, 4 * len(dataset_order) / 12))
-    palette = sns.color_palette('colorblind', n_colors=3)
+    palette = sns.color_palette('colorblind', n_colors=4)
     hue_order = ['Observed LE', 'LER', 'DRC']
+    if include_deseq2:
+        hue_order.append('DEseq2')
     sns.barplot(data=results_df, y=metric, x='dataset', hue='task', order=dataset_order, hue_order=hue_order, palette=palette, ax=ax)
     ax.set_xticklabels(ax.get_xticklabels(), rotation=60, ha='right', fontsize=8)
     ax.set_xlabel('')
@@ -252,6 +256,7 @@ def main(args):
             os.path.join(results_dir, 'is_linear_classifier_sim_nnk_7_epistatic_140_db_train_results.npy'),
             os.path.join(results_dir, 'neighbors_linear_classifier_sim_nnk_7_epistatic_140_db_train_results.npy'),
             os.path.join(results_dir, 'pairwise_linear_classifier_sim_nnk_7_epistatic_140_db_train_results.npy'),
+            os.path.join(results_dir, 'sim_nnk_7_epistatic_140_DEseq2_results.npy'),
             
         ],
         r'150-mer insertion ($4.6 \times 10^7$ short)': [
@@ -266,6 +271,7 @@ def main(args):
             os.path.join(results_dir, 'is_ann_2x200_weighted_sim_nnk_50_epistatic_1000_db_train_results.npy'),
             os.path.join(results_dir, 'is_ann_2x500_weighted_sim_nnk_50_epistatic_1000_db_train_results.npy'),
             os.path.join(results_dir, 'is_linear_weighted_sim_nnk_50_epistatic_1000_db_train_results.npy'),
+            os.path.join(results_dir, 'sim_nnk_50_epistatic_1000_DEseq2_results.npy'),
         ],
         r'300-mer insertion ($4.6 \times 10^7$ short)': [
             os.path.join(results_dir, 'observed_enrichment_sim_nnk_100_epistatic_2000_db_train_results.npy'),
@@ -281,6 +287,7 @@ def main(args):
             os.path.join(results_dir, 'is_ann_classifier_2x500_sim_nnk_100_epistatic_2000_db_train_results.npy'),
             os.path.join(results_dir, 'is_linear_classifier_sim_nnk_100_epistatic_2000_db_train_results.npy'),
             os.path.join(results_dir, 'neighbors_linear_classifier_sim_nnk_100_epistatic_2000_db_train_results.npy'),
+            os.path.join(results_dir, 'sim_nnk_100_epistatic_2000_DEseq2_results.npy'),
         ],
         r'avGFP mutagenesis ($4.6 \times 10^5$ long)': [
             os.path.join(results_dir, 'observed_enrichment_sim_gfp_mut0.1_460K_epistatic_4760_db_train_results.npy'),
@@ -304,6 +311,7 @@ def main(args):
             os.path.join(results_dir, 'is_cnn_classifier_8x5x100_sim_gfp_mut0.1_460K_epistatic_4760_db_train_results.npy'),
             os.path.join(results_dir, 'is_linear_classifier_sim_gfp_mut0.1_460K_epistatic_4760_db_train_results.npy'),
             os.path.join(results_dir, 'neighbors_linear_classifier_sim_gfp_mut0.1_460K_epistatic_4760_db_train_results.npy'),
+            os.path.join(results_dir, 'sim_gfp_mut0.1_460K_epistatic_4760_DEseq2_results.npy'),
         ],
         r'AAV recombination ($4.6 \times 10^5$ long)': [
             os.path.join(results_dir, 'observed_enrichment_sim_recomb_7_460K_epistatic_15020_db_train_results.npy'),
@@ -327,6 +335,7 @@ def main(args):
             os.path.join(results_dir, 'is_cnn_8x5x100_weighted_sim_recomb_7_460K_epistatic_15020_db_train_results.npy'),
             os.path.join(results_dir, 'is_linear_weighted_sim_recomb_7_460K_epistatic_15020_db_train_results.npy'),
             os.path.join(results_dir, 'neighbors_linear_weighted_sim_recomb_7_460K_epistatic_15020_db_train_results.npy'),
+            os.path.join(results_dir, 'sim_recomb_7_460K_epistatic_15020_DEseq2_results.npy'),
         ],
         r'AAV recombination ($4.6 \times 10^4$ long)': [
             os.path.join(results_dir, 'observed_enrichment_sim_recomb_7_46K_epistatic_15020_db_train_results.npy'),
@@ -350,6 +359,7 @@ def main(args):
             os.path.join(results_dir, 'is_cnn_8x5x100_weighted_sim_recomb_7_46K_epistatic_15020_db_train_results.npy'),
             os.path.join(results_dir, 'is_linear_weighted_sim_recomb_7_46K_epistatic_15020_db_train_results.npy'),
             os.path.join(results_dir, 'neighbors_linear_weighted_sim_recomb_7_46K_epistatic_15020_db_train_results.npy'),
+            os.path.join(results_dir, 'sim_recomb_7_46K_epistatic_15020_DEseq2_results.npy'),
         ],
         r'AAV recombination ($4.6 \times 10^3$ long)': [
             os.path.join(results_dir, 'observed_enrichment_sim_recomb_7_4K_epistatic_15020_db_train_results.npy'),
@@ -373,6 +383,7 @@ def main(args):
             os.path.join(results_dir, 'is_cnn_8x5x100_weighted_sim_recomb_7_4K_epistatic_15020_db_train_results.npy'),
             os.path.join(results_dir, 'is_linear_weighted_sim_recomb_7_4K_epistatic_15020_db_train_results.npy'),
             os.path.join(results_dir, 'neighbors_linear_weighted_sim_recomb_7_4K_epistatic_15020_db_train_results.npy'),
+            os.path.join(results_dir, 'sim_recomb_7_4K_epistatic_15020_DEseq2_results.npy'),
         ],
         r'avGFP mutagenesis ($4.6 \times 10^7$ short)': [
             os.path.join(results_dir, 'is_cnn_16x5x100_weighted_sim_gfp_mut0.1_epistatic_4760_short_db_train_results.npy'),
@@ -651,14 +662,14 @@ def main(args):
         ],
     }
     
-    results_df = compile_results_dataframe(train_result_files_dict)
+    results_df = compile_results_dataframe(train_result_files_dict, args.include_deseq2)
     make_results_stripplot(results_df, args.correlation,
                            args.out_dir, 'train' + args.out_description,
                            include_cnn=args.include_cnn, best_only=args.best_only,
-                           title='Estimation')
+                           include_deseq2=args.include_deseq2, title='Estimation')
     make_results_barplot(results_df, args.correlation,
                          args.out_dir, 'train' + args.out_description,
-                         include_cnn=args.include_cnn)
+                         include_cnn=args.include_cnn, include_deseq2=args.include_deseq2)
     print_best_only_comparison_stats(results_df)
     
     results_df = compile_results_dataframe(val_result_files_dict)
@@ -680,5 +691,6 @@ if __name__ == '__main__':
     parser.add_argument('--correlation', default='spearman_r', help='type of correlation to plot', type=str)
     parser.add_argument('--include_cnn', help='include convolutional architectures in plots', action='store_true')
     parser.add_argument('--best_only', help='plot only best-performing instance for each method', action='store_true')
+    parser.add_argument('--include_deseq2', help='include DEseq2 method in plots', action='store_true')
     args = parser.parse_args()
     main(args)
