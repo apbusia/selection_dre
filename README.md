@@ -1,5 +1,10 @@
 # Density Ratio Estimation for Selection Experiments
 
-What is the right way to model high-throughput sequencing data arising from biological selection experiments? One common approach involves two steps: 1) pre-process the sequencing data to estimate some type of enrichment score for each sequence and 2) use these enrichment scores as the target for supervised learning. What if we, instead, recognize the enrichment score as a density ratio and attempt to estimate it directly? Does reframing this modeling problem as density ratio estimation have any benefits? Perhaps in terms of the robustness of the ranking of the sequences, or in applicability to different types of sequencing technologies?
+This repo includes the code for the analyses presented in the paper
 
-See [the worklog](https://docs.google.com/document/d/10IupFgQpyiduU3cWUWYregTW2uuTfISdSs13cMQp4-8/edit#heading=h.6ljosr7dawi5) for this project for more information.
+A. Busia and J. Listgarten. Model-based differential sequencing analysis. *bioRxiv*, 2023.
+
+which use model-based enrichment (MBE)---a density ratio estimation (DRE) approach for estimating and/or predicting log-enrichment from sequencing data---to quantify high-throughput selection experiments. See the [MBE package](https://github.com/apbusia/model_based_enrichment) for a more general implementation of MBE.
+
+
+MBE is implemented using the linear, fully-connected neural network, and convolutional neural network model architectures defined in ```modeling.py```, which are trained and evaluted using ```run_models.py``` and ```evaluate_models.py```. In addition to the model evaluations in ```evaluate_models.py```, ```negative_selection.py``` implements analyses of negative selection simulations and the scripts in ```plotting``` generate the plots presented in the main text and SI of the paper. Simulated libraries and sequencing datasets were generated using the ```simulate_(...).py``` scripts, ```simlord_from_counts.py```, and ```add_random_noise.py```.
