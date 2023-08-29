@@ -1,8 +1,8 @@
-# Density Ratio Estimation for Selection Experiments
+# Model-based Enrichment for Selection Experiments
 
 This repo includes the code for the analyses presented in the paper
 
-A. Busia and J. Listgarten. Model-based differential sequencing analysis. *bioRxiv*, 2023.
+A. Busia and J. Listgarten. MBE: Model-based enrichment estimation and prediction for differential sequencing data. *Genome Biology*, 2023.
 
 which quantify high-throughput selection experiments using model-based enrichment (MBE)---a density ratio estimation (DRE) approach for estimating and/or predicting log-enrichment from sequencing data.
 
